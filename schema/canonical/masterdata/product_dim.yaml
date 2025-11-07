@@ -1,0 +1,15 @@
+table_name: product_dim
+schema: PUBLIC
+columns:
+  - name: PRODUCT_ID
+    type: NUMBER(20)
+    nullable: false
+  - name: PRODUCT_NAME
+    type: VARCHAR(100)
+    nullable: false
+  - name: PRODUCT_CATEGORY
+    type: VARCHAR(150)
+    nullable: true
+  - name: CREATED_AT
+    type: TIMESTAMP_NTZ
+    nullable: false

@@ -1,0 +1,11 @@
+{
+  "account": "IJIPYSX-XZ71784",
+  "user": "chandu2103",
+  "password": "Snowflake@20156606",
+  "database": "sales",
+  "schema_raw": "sales_raw",
+  "schema_canonical": "sales_canonical",
+  "schema_curated": "sales_curated",
+  "warehouse": "adhoc_wh",
+  "role": "ACCOUNTADMIN"
+}

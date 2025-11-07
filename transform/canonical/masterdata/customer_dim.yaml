@@ -1,0 +1,18 @@
+table_name: CUSTOMER_DIM
+schema: SALES_CANONICAL
+columns:
+  - name: CUSTOMER_ID
+    type: VARCHAR(50)
+    nullable: false
+  - name: CUSTOMER_NAME
+    type: VARCHAR(100)
+    nullable: false
+  - name: DOB
+    type: DATE
+    nullable: true
+  - name: EMAIL
+    type: VARCHAR(150)
+    nullable: true
+  - name: CREATED_AT
+    type: TIMESTAMP_NTZ
+    nullable: false

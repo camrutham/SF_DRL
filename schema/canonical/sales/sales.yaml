@@ -1,0 +1,15 @@
+table_name: SALES
+schema: PUBLIC
+columns:
+  - name: CUSTOMER_ID
+    type: NUMBER(20)
+    nullable: false
+  - name: PRODUCT_ID
+    type: NUMBER(20)
+    nullable: false
+  - name: SALE_DATE
+    type: DATE
+    nullable: true
+  - name: SALE_AMOUNT
+    type: NUMBER(20)
+    nullable: true
