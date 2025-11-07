@@ -1,9 +1,0 @@
-CREATE TABLE IF NOT EXISTS {{ database }}.{{ schema }}.{{ table_name }} (
-{% for c in columns %}
-  {{ c.name }} {{ c.type }}{% if c.not_null %} NOT NULL{% endif %}{% if not loop.last %},{% endif %}
-{% endfor %}
-)
-{% if cluster_by %}
-CLUSTER BY ({{ cluster_by }})
-{% endif %}
-;
