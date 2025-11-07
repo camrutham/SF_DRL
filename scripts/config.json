@@ -1,11 +1,40 @@
 {
-  "account": "IJIPYSX-XZ71784",
-  "user": "chandu2103",
-  "password": "Snowflake@20156606",
-  "database": "sales",
-  "schema_raw": "sales_raw",
-  "schema_canonical": "sales_canonical",
-  "schema_curated": "sales_curated",
-  "warehouse": "adhoc_wh",
-  "role": "ACCOUNTADMIN"
+  "snowflake": {
+    "account": "IJIPYSX-XZ71784",
+    "user": "chandu2103",
+    "password": "Snowflake@20156606",
+    "database": "sales",
+    "schema_raw": "sales_raw",
+    "schema_canonical": "sales_canonical",
+    "schema_curated": "sales_curated",
+    "warehouse": "adhoc_wh",
+    "role": "ACCOUNTADMIN"
+  },
+  "directories": {
+    "config": "config",
+    "logs": "logs",
+    "schema": "schema",
+    "templates": "templates"
+  },
+  "files": {
+    "config": "config.json",
+    "manifest": "scripts/ingest_manifest.json",
+    "templates": {
+      "file_formats": "file_formats.csv",
+      "storage_integrations": "storage_integrations.csv",
+      "stages": "stages.csv"
+    }
+  },
+  "sql": {
+    "markers": {
+      "setup": "-- Step 1: File Format Definition",
+      "full_load": "-- FULL LOAD SECTION",
+      "incremental_load": "-- INCREMENTAL LOAD SECTION"
+    },
+    "schema_layer_map": {
+      "raw": "schema_raw",
+      "canonical": "schema_canonical",
+      "curated": "schema_curated"
+    }
+  }
 }

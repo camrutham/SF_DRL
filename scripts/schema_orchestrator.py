@@ -8,12 +8,13 @@ from snowflake_utils import connect_snowflake, get_config, execute_sql
 
 # --- Load config ---
 cfg = get_config()
-db_name = cfg["database"]
+snowflake_cfg = cfg["snowflake"]
+db_name = snowflake_cfg["database"]
 
 schema_map = {
-    "raw": cfg["schema_raw"],
-    "canonical": cfg["schema_canonical"],
-    "curated": cfg["schema_curated"]
+    "raw": snowflake_cfg["schema_raw"],
+    "canonical": snowflake_cfg["schema_canonical"],
+    "curated": snowflake_cfg["schema_curated"]
 }
 
 # --- Connect to Snowflake ---
@@ -133,15 +134,16 @@ stages_csv = templates_dir / "stages.csv"
 
 # Execute CSV-driven DDL first
 cfg = get_config()
-db_name = cfg["database"]
+snowflake_cfg = cfg["snowflake"]
+db_name = snowflake_cfg["database"]
 
 # Ensure database and schema exist before using
 execute_sql(cur, f"CREATE DATABASE IF NOT EXISTS {db_name}", "Create Database")
-execute_sql(cur, f"CREATE SCHEMA IF NOT EXISTS {db_name}.{cfg['schema_raw']}", f"Create Schema {cfg['schema_raw']}")
+execute_sql(cur, f"CREATE SCHEMA IF NOT EXISTS {db_name}.{snowflake_cfg['schema_raw']}", f"Create Schema {snowflake_cfg['schema_raw']}")
 
-cur.execute(f"USE ROLE {cfg['role']}")
+cur.execute(f"USE ROLE {snowflake_cfg['role']}")
 cur.execute(f"USE DATABASE {db_name}")
-cur.execute(f"USE SCHEMA {cfg['schema_raw']}")
+cur.execute(f"USE SCHEMA {snowflake_cfg['schema_raw']}")
 
 create_file_formats(cur, cfg, file_formats_csv)
 create_storage_integrations(cur, cfg, storage_int_csv)

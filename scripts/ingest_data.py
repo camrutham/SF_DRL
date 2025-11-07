@@ -121,8 +121,9 @@ def connect_snowflake(cfg):
     
     # Set additional context specific to ingestion
     cur = conn.cursor()
-    cur.execute(f"USE DATABASE {cfg['database']}")
-    cur.execute(f"USE SCHEMA {cfg['schema_raw']}")
+    snowflake_cfg = cfg["snowflake"]
+    cur.execute(f"USE DATABASE {snowflake_cfg['database']}")
+    cur.execute(f"USE SCHEMA {snowflake_cfg['schema_raw']}")
     
     logging.info("✅ Connected to Snowflake.")
     return conn
@@ -231,13 +232,14 @@ def ingest_entity(entity_type: str, full_refresh: bool = False) -> None:
         cur = conn.cursor()
 
         # Set execution context
-        cur.execute(f"USE ROLE {cfg['role']}")
-        cur.execute(f"USE DATABASE {cfg['database']}")
-        cur.execute(f"USE SCHEMA {cfg['schema_raw']}")
-        cur.execute(f"USE WAREHOUSE {cfg['warehouse']}")
+        snowflake_cfg = cfg["snowflake"]
+        cur.execute(f"USE ROLE {snowflake_cfg['role']}")
+        cur.execute(f"USE DATABASE {snowflake_cfg['database']}")
+        cur.execute(f"USE SCHEMA {snowflake_cfg['schema_raw']}")
+        cur.execute(f"USE WAREHOUSE {snowflake_cfg['warehouse']}")
         
         # Set up search path to include raw schema
-        cur.execute(f"ALTER SESSION SET SEARCH_PATH = {cfg['database']}.{cfg['schema_raw']}")
+        cur.execute(f"ALTER SESSION SET SEARCH_PATH = {snowflake_cfg['database']}.{snowflake_cfg['schema_raw']}")
 
         cur.execute("SELECT CURRENT_DATABASE(), CURRENT_SCHEMA(), CURRENT_ROLE();")
         context = cur.fetchone()
@@ -256,7 +258,7 @@ def ingest_entity(entity_type: str, full_refresh: bool = False) -> None:
         # Add schema to table references if not present
         if entity_type in Config.TARGET_TABLES:
             table_name = Config.TARGET_TABLES[entity_type]
-            schema_prefix = f"{cfg['schema_raw']}."
+            schema_prefix = f"{snowflake_cfg['schema_raw']}."
             load_block = load_block.replace(f" {table_name}", f" {schema_prefix}{table_name}")
         
         execute_sql_statements(cur, load_block)
