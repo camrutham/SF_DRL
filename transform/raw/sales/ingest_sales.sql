@@ -5,29 +5,6 @@
 -- Author: Data Engineering Team
 -- ============================================================================
 
--- Step 1: File Format Definition
--- ----------------------------------------------------------------------------
-CREATE OR REPLACE FILE FORMAT parquet_format
-  TYPE = 'PARQUET';
-
--- ----------------------------------------------------------------------------
--- Step 2: Storage Integration with S3
--- ----------------------------------------------------------------------------
-CREATE OR REPLACE STORAGE INTEGRATION s3_int
-  TYPE = EXTERNAL_STAGE
-  STORAGE_PROVIDER = S3
-  ENABLED = TRUE
-  STORAGE_AWS_ROLE_ARN = 'arn:aws:iam::849107555298:role/aws_s3_sf_int'
-  STORAGE_ALLOWED_LOCATIONS = ('s3://sales-cam-dev/external_stage/')
-  COMMENT = 'Integration between Snowflake and S3 for sales data ingestion';
-
--- ----------------------------------------------------------------------------
--- Step 3: External Stage for Sales Data
--- ----------------------------------------------------------------------------
-CREATE OR REPLACE STAGE sales_stage
-  URL = 's3://sales-cam-dev/external_stage/sales/'
-  FILE_FORMAT = parquet_format
-  STORAGE_INTEGRATION = s3_int;
 
 -- ============================================================================
 -- FULL LOAD SECTION
