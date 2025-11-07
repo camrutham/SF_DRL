@@ -5,20 +5,13 @@
 -- Author: Data Engineering Team
 -- ============================================================================
 
+-- Step 1: File Format Definition
 -- ----------------------------------------------------------------------------
--- Step 1: Schema Setup
--- ----------------------------------------------------------------------------
-CREATE SCHEMA IF NOT EXISTS sales.file_formats;
-CREATE SCHEMA IF NOT EXISTS sales.external_stage;
-
--- ----------------------------------------------------------------------------
--- Step 2: File Format Definition
--- ----------------------------------------------------------------------------
-CREATE OR REPLACE FILE FORMAT sales.file_formats.parquet_format
+CREATE OR REPLACE FILE FORMAT parquet_format
   TYPE = 'PARQUET';
 
 -- ----------------------------------------------------------------------------
--- Step 3: Storage Integration with S3
+-- Step 2: Storage Integration with S3
 -- ----------------------------------------------------------------------------
 CREATE OR REPLACE STORAGE INTEGRATION s3_int
   TYPE = EXTERNAL_STAGE
@@ -29,18 +22,16 @@ CREATE OR REPLACE STORAGE INTEGRATION s3_int
   COMMENT = 'Integration between Snowflake and S3 for sales data ingestion';
 
 -- ----------------------------------------------------------------------------
--- Step 4: External Stage for Sales Data
+-- Step 3: External Stage for Sales Data
 -- ----------------------------------------------------------------------------
-CREATE OR REPLACE STAGE sales.external_stage.sales_stage
+CREATE OR REPLACE STAGE sales_stage
   URL = 's3://sales-cam-dev/external_stage/sales/'
-  FILE_FORMAT = sales.file_formats.parquet_format
+  FILE_FORMAT = parquet_format
   STORAGE_INTEGRATION = s3_int;
 
 -- ============================================================================
 -- FULL LOAD SECTION
 -- ============================================================================
-
--- Create a session-scoped temporary staging table
 CREATE OR REPLACE TEMP TABLE sales_stage_temp AS
 SELECT 
     $1:sale_line_ref_num::INT AS sale_line_ref_num,
@@ -51,20 +42,17 @@ SELECT
     $1:region::STRING AS region,
     $1:order_date::DATE AS order_date,
     TO_TIMESTAMP(($1:date_updated::NUMBER) / 1e9) AS date_updated
-FROM @sales.external_stage.sales_stage/sales.parquet;
+FROM @sales_stage/sales.parquet;
 
--- Load into target raw table
 INSERT INTO sales.sales_raw.sales_raw
 SELECT * FROM sales_stage_temp;
 
--- Optional: drop temp table for cleanup
+-- Optional: drop temp table (not necessary, auto-dropped)
 DROP TABLE IF EXISTS sales_stage_temp;
 
 -- ============================================================================
 -- INCREMENTAL LOAD SECTION
 -- ============================================================================
-
--- Create temporary table for incremental data
 CREATE OR REPLACE TEMP TABLE sales_stage_incr_temp AS
 SELECT 
     $1:sale_line_ref_num::INT AS sale_line_ref_num,
@@ -75,9 +63,8 @@ SELECT
     $1:region::STRING AS region,
     $1:order_date::DATE AS order_date,
     TO_TIMESTAMP(($1:date_updated::NUMBER) / 1e9) AS date_updated
-FROM @sales.external_stage.sales_stage/sales.parquet;
+FROM @sales_stage/sales.parquet;
 
--- Merge incremental data based on sale_line_ref_num and date_updated
 MERGE INTO sales_raw.sales_raw AS target
 USING (
     SELECT 
@@ -105,5 +92,4 @@ WHEN NOT MATCHED THEN
     INSERT (sale_line_ref_num, customer_id, product_id, sales_amount, sale_qty, region, order_date, date_updated)
     VALUES (src.sale_line_ref_num, src.customer_id, src.product_id, src.sales_amount, src.sale_qty, src.region, src.order_date, src.date_updated);
 
--- Optional: drop temp table after merge
 DROP TABLE IF EXISTS sales_stage_incr_temp;

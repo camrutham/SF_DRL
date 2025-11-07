@@ -1,64 +1,55 @@
 import os
-import sys
 import json
 import logging
+import sys
 from datetime import datetime
+from pathlib import Path
 import snowflake.connector
 
-# ---------------------------
-# Paths and Config
-# ---------------------------
+# ==========================================================
+# Paths & Logging Setup
+# ==========================================================
+# Get script directory and project root
+SCRIPT_DIR = Path(__file__).resolve().parent
+PROJECT_ROOT = SCRIPT_DIR.parent
 
-BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-CONFIG_PATH = os.path.join(BASE_DIR, "scripts", "config.json")
-SQL_FILE = os.path.join(BASE_DIR, "transform", "raw", "sales", "ingest_sales.sql")
+# Configuration paths
+CONFIG_FILE = "config.json"
+CONFIG_PATH = SCRIPT_DIR / CONFIG_FILE
 
-LOG_DIR = os.path.join(BASE_DIR, "logs")
-os.makedirs(LOG_DIR, exist_ok=True)
-LOG_FILE = os.path.join(LOG_DIR, f"ingest_sales_{datetime.now().strftime('%Y%m%d_%H%M%S')}.log")
+# SQL paths - relative to transform/raw/sales
+SQL_DIR = PROJECT_ROOT / "transform" / "raw" / "sales"
+SQL_FILE = SQL_DIR / "ingest_sales.sql"
 
-# ---------------------------
 # Logging setup
-# ---------------------------
+LOG_DIR = PROJECT_ROOT / "logs"
+LOG_DIR.mkdir(exist_ok=True)
+LOG_FILE = LOG_DIR / f"ingest_sales_{datetime.now().strftime('%Y%m%d_%H%M%S')}.log"
 
 logging.basicConfig(
     filename=LOG_FILE,
-    level=logging.DEBUG,  # use DEBUG to get full details
+    level=logging.INFO,
     format="%(asctime)s [%(levelname)s] %(message)s",
 )
-
 console = logging.StreamHandler()
 console.setLevel(logging.INFO)
 console.setFormatter(logging.Formatter("%(asctime)s [%(levelname)s] %(message)s"))
 logging.getLogger().addHandler(console)
 
-# ---------------------------
+
+# ==========================================================
 # Helper Functions
-# ---------------------------
-
+# ==========================================================
 def load_config():
-    """Load Snowflake connection config from config.json."""
-    if not os.path.exists(CONFIG_PATH):
-        raise FileNotFoundError(f"Configuration file not found at {CONFIG_PATH}")
-
+    """Load Snowflake configuration."""
+    if not CONFIG_PATH.exists():
+        raise FileNotFoundError(f"❌ Config file not found at {CONFIG_PATH}")
     with open(CONFIG_PATH, "r") as f:
-        config = json.load(f)
-
-    required_keys = [
-        "account", "user", "password", "database",
-        "schema_raw", "warehouse", "role"
-    ]
-    missing = [k for k in required_keys if k not in config]
-    if missing:
-        raise KeyError(f"Missing keys in config.json: {missing}")
-
-    logging.debug(f"Loaded config: {json.dumps(config, indent=2)}")
-    return config
+        return json.load(f)
 
 
-def get_snowflake_connection(cfg):
-    """Establish Snowflake connection using config values."""
-    logging.info(f"Connecting to Snowflake account: {cfg['account']} as {cfg['user']}")
+def connect_snowflake(cfg):
+    """Connect to Snowflake."""
     conn = snowflake.connector.connect(
         user=cfg["user"],
         password=cfg["password"],
@@ -66,173 +57,136 @@ def get_snowflake_connection(cfg):
         warehouse=cfg["warehouse"],
         database=cfg["database"],
         schema=cfg["schema_raw"],
-        role=cfg["role"]
+        role=cfg["role"],
     )
-    logging.info("✅ Snowflake connection established.")
+    logging.info("✅ Connected to Snowflake.")
     return conn
 
 
-def table_is_empty(cursor, table_name):
-    """Check if target table is empty."""
-    try:
-        cursor.execute(f"SELECT COUNT(*) FROM {table_name}")
-        count = cursor.fetchone()[0]
-        logging.info(f"Target table {table_name} currently has {count} rows.")
-        return count == 0
-    except Exception as e:
-        logging.warning(f"Could not check table {table_name}: {e}")
-        return True
-
-
-def extract_sql_block(sql_script, mode):
-    """
-    Extracts the relevant SQL section for full or incremental load.
-    Uses standardized headers:
-      -- FULL LOAD SECTION
-      -- INCREMENTAL LOAD SECTION
-    """
-    lower_sql = sql_script.lower()
-
-    if "-- full load section" not in lower_sql or "-- incremental load section" not in lower_sql:
-        raise ValueError("SQL script must contain '-- FULL LOAD SECTION' and '-- INCREMENTAL LOAD SECTION' markers.")
-
-    full_start = lower_sql.find("-- full load section")
-    incr_start = lower_sql.find("-- incremental load section")
-
-    if mode == "full":
-        block = sql_script[full_start:incr_start].strip()
+def extract_sql_block(sql_text, mode):
+    """Extract setup statements and FULL or INCREMENTAL block from SQL file."""
+    sql_lower = sql_text.lower()
+    if "-- full load section" not in sql_lower or "-- incremental load section" not in sql_lower:
+        raise ValueError("❌ SQL must contain '-- FULL LOAD SECTION' and '-- INCREMENTAL LOAD SECTION'.")
+    
+    # Find section markers
+    setup_marker = "-- ============================================================================"
+    full_marker = "-- ============================================================================\n-- FULL LOAD SECTION"
+    incr_marker = "-- ============================================================================\n-- INCREMENTAL LOAD SECTION"
+    
+    # Find section positions
+    setup_pos = sql_text.find(setup_marker)
+    full_pos = sql_text.find(full_marker)
+    incr_pos = sql_text.find(incr_marker)
+    
+    # Return appropriate section
+    if mode == "setup":
+        # Everything from start to full load section, excluding setup marker
+        return sql_text[setup_pos + len(setup_marker):full_pos].strip()
+    elif mode == "full":
+        # Everything between full and incremental sections, excluding full marker
+        section = sql_text[full_pos + len(full_marker):incr_pos].strip()
+        if section.startswith("--"):
+            section = section[section.find("\n") + 1:].strip()
+        return section
     else:
-        block = sql_script[incr_start:].strip()
-
-    logging.debug(f"Extracted SQL block for mode [{mode}] — {len(block)} chars")
-    return block
-
-
-def run_sql_block(cursor, sql_block):
-    """Safely execute multiple SQL statements in sequence, with debug logging."""
-    statements = [stmt.strip() for stmt in sql_block.split(";") if stmt.strip()]
-    logging.info(f"Executing {len(statements)} SQL statements in this block...")
-
-    for i, stmt in enumerate(statements, start=1):
-        if stmt.startswith("--") or stmt.startswith("/*"):
-            continue
-        try:
-            preview = stmt.replace("\n", " ")[:150]
-            logging.debug(f"Running statement {i}/{len(statements)}: {preview}")
-            cursor.execute(stmt)
-            logging.info(f"✅ Statement {i}/{len(statements)} executed successfully.")
-        except Exception as e:
-            logging.error(f"❌ Error executing statement {i}: {e}", exc_info=True)
-            raise
+        # Everything after incremental section, excluding incremental marker
+        section = sql_text[incr_pos + len(incr_marker):].strip()
+        if section.startswith("--"):
+            section = section[section.find("\n") + 1:].strip()
+        return section
 
 
-def log_merge_stats(cursor):
-    """Fetch Snowflake MERGE results (if any)."""
+def execute_sql_statements(cur, sql_block):
+    """Execute multiple SQL statements by splitting them and executing individually."""
     try:
-        cursor.execute("SELECT * FROM TABLE(RESULT_SCAN(LAST_QUERY_ID()));")
-        result = cursor.fetchall()
-        if result:
-            logging.info(f"MERGE stats: {result}")
-    except Exception as e:
-        logging.warning(f"Could not fetch merge stats: {e}")
+        # Split statements on semicolons, but handle them more carefully
+        raw_statements = sql_block.split(';')
+        # Clean and filter statements
+        statements = []
+        for stmt in raw_statements:
+            # Clean up the statement
+            cleaned = stmt.strip()
+            # Only add non-empty statements
+            if cleaned and not cleaned.startswith('--'):
+                statements.append(cleaned)
+        
+        logging.info(f"🧾 Executing {len(statements)} statements...")
 
-
-# ---------------------------
-# Diagnostics Helpers
-# ---------------------------
-
-def log_stage_diagnostics(cursor):
-    """List stage files and count rows visible from Python session."""
-    try:
-        logging.info("Checking stage visibility...")
-        cursor.execute("LIST @sales.external_stage.sales_stage;")
-        result = cursor.fetchall()
-        logging.info(f"Stage files visible: {len(result)}")
-        for row in result:
-            logging.debug(f"Stage file: {row}")
-
-        logging.info("Counting rows directly from stage file...")
-        cursor.execute("SELECT COUNT(*) FROM @sales.external_stage.sales_stage/sales.parquet;")
-        count = cursor.fetchone()[0]
-        logging.info(f"✅ Rows visible from stage: {count}")
+        # Execute each statement individually
+        for stmt in statements:
+            cur.execute(stmt)
+            # Fetch results if available
+            results = cur.fetchall() if cur.description else None
+            if results:
+                logging.info(f"✅ Query results: {results}")
+        
+        logging.info("✅ All statements executed successfully.")
 
     except Exception as e:
-        logging.error(f"Stage diagnostics failed: {e}", exc_info=True)
+        logging.error(f"❌ Multi-statement execution failed: {e}", exc_info=True)
+        raise
 
-
-# ---------------------------
-# Main Logic
-# ---------------------------
-
+# ==========================================================
+# Main
+# ==========================================================
 def main():
     start_time = datetime.now()
-    logging.info("=== Starting RAW Sales Ingestion ===")
+    logging.info("🚀 Starting Sales ingestion process...")
 
-    full_refresh_flag = "--full-refresh" in sys.argv
+    full_refresh = "--full-refresh" in sys.argv
     conn = None
 
     try:
+        # Load config
         cfg = load_config()
 
-        if not os.path.exists(SQL_FILE):
-            raise FileNotFoundError(f"SQL file not found at {SQL_FILE}")
+        # Validate SQL file
+        if not SQL_FILE.exists():
+            raise FileNotFoundError(f"❌ SQL file not found at {SQL_FILE}")
 
-        conn = get_snowflake_connection(cfg)
+        # Read SQL
+        with open(SQL_FILE, "r") as f:
+            sql_text = f.read()
+
+        # Connect to Snowflake
+        conn = connect_snowflake(cfg)
         cur = conn.cursor()
 
-        # Explicitly set correct context
-        logging.info("Setting Snowflake session context...")
-        cur.execute(f"USE ROLE {cfg['role']};")
-        cur.execute(f"USE DATABASE {cfg['database']};")
-        cur.execute(f"USE WAREHOUSE {cfg['warehouse']};")
-        cur.execute(f"USE SCHEMA {cfg['schema_raw']};")
+        # Set execution context
+        cur.execute(f"USE ROLE {cfg['role']}")
+        cur.execute(f"USE DATABASE {cfg['database']}")
+        cur.execute(f"USE SCHEMA {cfg['schema_raw']}")
+        cur.execute(f"USE WAREHOUSE {cfg['warehouse']}")
 
-        cur.execute("SELECT CURRENT_ROLE(), CURRENT_DATABASE(), CURRENT_SCHEMA();")
-        logging.info(f"Current context: {cur.fetchall()}")
+        cur.execute("SELECT CURRENT_DATABASE(), CURRENT_SCHEMA(), CURRENT_ROLE();")
+        context = cur.fetchone()
+        logging.info(f"🧭 Context: DB={context[0]}, Schema={context[1]}, Role={context[2]}")
 
-        # Stage diagnostics
-        log_stage_diagnostics(cur)
+        # First execute setup statements
+        logging.info("▶ Setting up file format, integration and stage...")
+        setup_block = extract_sql_block(sql_text, "setup")
+        execute_sql_statements(cur, setup_block)
 
-        with open(SQL_FILE, "r") as f:
-            sql_script = f.read()
-
-        target_table = f"{cfg['schema_raw']}.sales_raw"
-
-        if full_refresh_flag or table_is_empty(cur, target_table):
-            mode = "full"
-            logging.info("🧱 Running FULL REFRESH mode.")
-        else:
-            mode = "incremental"
-            logging.info("🔁 Running INCREMENTAL mode.")
-
-        sql_block = extract_sql_block(sql_script, mode).strip()
-        logging.info(f"SQL block extracted ({len(sql_block)} chars).")
-        logging.debug(f"--- SQL Block Start ---\n{sql_block}\n--- SQL Block End ---")
-
-        # Execute the SQL block
-        run_sql_block(cur, sql_block)
-
-        if mode == "incremental":
-            log_merge_stats(cur)
-
-        # Verify data load
-        cur.execute(f"SELECT COUNT(*) FROM {target_table}")
-        count = cur.fetchone()[0]
-        logging.info(f"✅ Row count after {mode.upper()} load: {count}")
+        # Then execute the data load section
+        mode = "full" if full_refresh else "incremental"
+        logging.info(f"▶ Running {mode.upper()} load from SQL file...")
+        load_block = extract_sql_block(sql_text, mode)
+        execute_sql_statements(cur, load_block)
 
         conn.commit()
-        logging.info(f"✅ {mode.upper()} ingestion completed successfully.")
+        logging.info("✅ All statements executed and committed successfully.")
 
     except Exception as e:
         logging.error(f"❌ Ingestion failed: {e}", exc_info=True)
         raise
-
     finally:
         if conn:
             conn.close()
-            logging.info("Connection closed.")
+            logging.info("🔒 Connection closed.")
         duration = (datetime.now() - start_time).total_seconds()
-        logging.info(f"=== Process finished in {duration:.2f} seconds ===")
+        logging.info(f"⏱️ Duration: {duration:.2f}s")
+        logging.info(f"📄 Log file saved at: {LOG_FILE}")
 
 
 if __name__ == "__main__":
