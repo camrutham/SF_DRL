@@ -1,0 +1,14 @@
+{
+  "sql_paths": {
+    "sales": "transform/raw/sales",
+    "customer": "transform/raw/masterdata"
+  },
+  "sql_files": {
+    "sales": "ingest_sales.sql",
+    "customer": "ingest_customer.sql"
+  },
+  "target_tables": {
+    "sales": "sales_raw",
+    "customer": "customer_raw"
+  }
+}
