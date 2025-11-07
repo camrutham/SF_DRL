@@ -1,18 +1,33 @@
-table_name: CUSTOMER_DIM
-schema: SALES_CANONICAL
+table_name: customer_dim
+description: Customer master data containing customer details and region mapping.
+
 columns:
   - name: CUSTOMER_ID
-    type: VARCHAR(50)
+    type: NUMBER
     nullable: false
+    description: Unique identifier for each customer.
+
   - name: CUSTOMER_NAME
-    type: VARCHAR(100)
+    type: STRING
     nullable: false
-  - name: DOB
-    type: DATE
+    description: Full name of the customer.
+
+  - name: CUSTOMER_STATE
+    type: STRING
     nullable: true
-  - name: EMAIL
-    type: VARCHAR(150)
+    description: State where the customer is located.
+
+  - name: CUSTOMER_TYPE
+    type: STRING
     nullable: true
-  - name: CREATED_AT
-    type: TIMESTAMP_NTZ
-    nullable: false
+    description: Category or segment of the customer (e.g., Retail, Wholesale, Corporate).
+
+  - name: CUSTOMER_REGION
+    type: STRING
+    nullable: true
+    description: Geographical region to which the customer belongs (e.g., North, South, East, West).
+
+  - name: DATE_UPDATED
+    type: TIMESTAMP
+    nullable: true
+    description: Date and time when the customer record was last updated.

@@ -1,15 +1,23 @@
 table_name: product_dim
-schema: PUBLIC
+description: Product master data.
+
 columns:
   - name: PRODUCT_ID
-    type: NUMBER(20)
+    type: NUMBER
     nullable: false
+    description: Unique identifier for each customer.
+
   - name: PRODUCT_NAME
-    type: VARCHAR(100)
+    type: STRING
     nullable: false
-  - name: PRODUCT_CATEGORY
-    type: VARCHAR(150)
+    description: Full name of the Product.
+
+  - name: PRODUCT_CATEGORY_NAME
+    type: STRING
     nullable: true
-  - name: CREATED_AT
-    type: TIMESTAMP_NTZ
-    nullable: false
+    description: PROD Category name associated with the product.
+
+  - name: DATE_UPDATED
+    type: TIMESTAMP
+    nullable: true
+    description: Date and time when the product record was last updated.

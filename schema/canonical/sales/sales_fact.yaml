@@ -1,0 +1,34 @@
+table_name: SALES_FACT
+description: Sales fact table containing sales transactions linked to customers and products.
+columns:
+  - name: SALE_LINE_REF_NUM
+    type: INT
+    constraints: "PRIMARY KEY"
+
+  - name: CUSTOMER_ID
+    type: INT
+    constraints: "NOT NULL"
+
+  - name: PRODUCT_ID
+    type: INT
+    constraints: "NOT NULL"
+
+  - name: SALES_AMOUNT
+    type: DECIMAL(12,2)
+    constraints: "NOT NULL"
+
+  - name: SALE_QTY
+    type: INT
+    constraints: "NOT NULL"
+
+  - name: REGION
+    type: VARCHAR(50)
+    constraints: ""
+
+  - name: ORDER_DATE
+    type: DATE
+    constraints: "NOT NULL"
+
+  - name: DATE_UPDATED
+    type: TIMESTAMP
+    default: "DEFAULT CURRENT_TIMESTAMP"
