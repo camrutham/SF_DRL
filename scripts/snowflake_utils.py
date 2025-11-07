@@ -33,9 +33,9 @@ def connect_snowflake():
     """
     cfg = get_config()
     conn = snowflake.connector.connect(
-        user="chandu2103",  # Ideally move this to config too for flexibility
-        password="Snowflake@20156606",
-        account="IJIPYSX-XZ71784",  # e.g. xy12345.ap-south-1
+        user=cfg["user"],
+        password=cfg["password"],
+        account=cfg["account"],
         warehouse=cfg["warehouse"],
         role=cfg["role"]
     )

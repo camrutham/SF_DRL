@@ -115,16 +115,15 @@ def load_config():
         return json.load(f)
 
 def connect_snowflake(cfg):
-    """Connect to Snowflake."""
-    conn = snowflake.connector.connect(
-        user=cfg["user"],
-        password=cfg["password"],
-        account=cfg["account"],
-        warehouse=cfg["warehouse"],
-        database=cfg["database"],
-        schema=cfg["schema_raw"],
-        role=cfg["role"],
-    )
+    """Connect to Snowflake with specific database and schema context."""
+    from snowflake_utils import connect_snowflake as connect
+    conn = connect()  # This gets base connection
+    
+    # Set additional context specific to ingestion
+    cur = conn.cursor()
+    cur.execute(f"USE DATABASE {cfg['database']}")
+    cur.execute(f"USE SCHEMA {cfg['schema_raw']}")
+    
     logging.info("✅ Connected to Snowflake.")
     return conn
 
@@ -182,6 +181,8 @@ def extract_sql_block(sql_text: str, mode: str) -> str:
 def execute_sql_statements(cur, sql_block: str) -> None:
     """Execute multiple SQL statements by splitting them and executing individually."""
     try:
+        from snowflake_utils import execute_sql
+        
         # Split statements on semicolons, but handle them more carefully
         raw_statements = sql_block.split(';')
         # Clean and filter statements
@@ -195,9 +196,9 @@ def execute_sql_statements(cur, sql_block: str) -> None:
         
         logging.info(f"🧾 Executing {len(statements)} statements...")
 
-        # Execute each statement individually
-        for stmt in statements:
-            cur.execute(stmt)
+        # Execute each statement individually using utility function
+        for i, stmt in enumerate(statements, 1):
+            execute_sql(cur, stmt, f"Statement {i}/{len(statements)}")
             # Fetch results if available
             results = cur.fetchall() if cur.description else None
             if results:
