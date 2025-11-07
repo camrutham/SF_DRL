@@ -1,0 +1,21 @@
+2025-11-07 19:22:11,620 [INFO] 🚀 Starting Sales ingestion process...
+2025-11-07 19:22:11,625 [INFO] Snowflake Connector for Python Version: 3.17.2, Python Version: 3.13.7, Platform: Windows-11-10.0.26100-SP0
+2025-11-07 19:22:11,625 [INFO] Connecting to GLOBAL Snowflake domain
+2025-11-07 19:22:14,430 [INFO] ✅ Connected to Snowflake.
+2025-11-07 19:22:15,003 [INFO] 🧭 Context: DB=SALES, Schema=SALES_RAW, Role=ACCOUNTADMIN
+2025-11-07 19:22:15,003 [INFO] ▶ Setting up file format, integration and stage...
+2025-11-07 19:22:15,004 [INFO] 🧾 Executing 3 statements...
+2025-11-07 19:22:15,118 [INFO] ✅ Query results: [('File format PARQUET_FORMAT successfully created.',)]
+2025-11-07 19:22:15,240 [INFO] ✅ Query results: [('Integration S3_INT successfully created.',)]
+2025-11-07 19:22:16,804 [INFO] ✅ Query results: [('Stage area SALES_STAGE successfully created.',)]
+2025-11-07 19:22:16,807 [INFO] ✅ All statements executed successfully.
+2025-11-07 19:22:16,808 [INFO] ▶ Running INCREMENTAL load from SQL file...
+2025-11-07 19:22:16,808 [INFO] 🧾 Executing 3 statements...
+2025-11-07 19:22:20,607 [INFO] ✅ Query results: [('Table SALES_STAGE_INCR_TEMP successfully created.',)]
+2025-11-07 19:22:21,149 [INFO] ✅ Query results: [(13, 0)]
+2025-11-07 19:22:21,277 [INFO] ✅ Query results: [('SALES_STAGE_INCR_TEMP successfully dropped.',)]
+2025-11-07 19:22:21,278 [INFO] ✅ All statements executed successfully.
+2025-11-07 19:22:21,369 [INFO] ✅ All statements executed and committed successfully.
+2025-11-07 19:22:21,561 [INFO] 🔒 Connection closed.
+2025-11-07 19:22:21,561 [INFO] ⏱️ Duration: 9.94s
+2025-11-07 19:22:21,562 [INFO] 📄 Log file saved at: C:\repos\SF_E2E\logs\ingest_sales_20251107_192211.log

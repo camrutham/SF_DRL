@@ -1,0 +1,3 @@
+name,type,options
+parquet_format,PARQUET,
+csv_format,CSV,"FIELD_DELIMITER = ',' SKIP_HEADER = 1"
