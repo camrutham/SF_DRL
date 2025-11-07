@@ -124,11 +124,12 @@ def create_stages(cur, cfg, csv_path: Path):
         execute_sql(cur, sql, f"Create Stage {name}")
 
 
-# CSVs expected to live next to this script
+# CSV templates directory
 script_dir = Path(__file__).resolve().parent
-file_formats_csv = script_dir / "file_formats.csv"
-storage_int_csv = script_dir / "storage_integrations.csv"
-stages_csv = script_dir / "stages.csv"
+templates_dir = script_dir.parent / "templates"
+file_formats_csv = templates_dir / "file_formats.csv"
+storage_int_csv = templates_dir / "storage_integrations.csv"
+stages_csv = templates_dir / "stages.csv"
 
 # Execute CSV-driven DDL first
 cfg = get_config()
