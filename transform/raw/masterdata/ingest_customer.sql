@@ -6,21 +6,15 @@
 -- ============================================================================
 
 -- ----------------------------------------------------------------------------
--- Step 1: Schema Setup
+-- Step 1: File Format Definition
 -- ----------------------------------------------------------------------------
-CREATE SCHEMA IF NOT EXISTS sales.file_formats;
-CREATE SCHEMA IF NOT EXISTS sales.external_stage;
-
--- ----------------------------------------------------------------------------
--- Step 2: File Format Definition
--- ----------------------------------------------------------------------------
-CREATE OR REPLACE FILE FORMAT sales.file_formats.parquet_format
+CREATE OR REPLACE FILE FORMAT parquet_format
   TYPE = 'PARQUET';
 
 -- ----------------------------------------------------------------------------
--- Step 3: Storage Integration with S3
+-- Step 2: Storage Integration with S3
 -- ----------------------------------------------------------------------------
-CREATE OR REPLACE STORAGE INTEGRATION sales_raw.s3_int
+CREATE OR REPLACE STORAGE INTEGRATION s3_int
   TYPE = EXTERNAL_STAGE
   STORAGE_PROVIDER = S3
   ENABLED = TRUE
@@ -29,17 +23,17 @@ CREATE OR REPLACE STORAGE INTEGRATION sales_raw.s3_int
   COMMENT = 'Integration between Snowflake and S3 for customer data ingestion';
 
 -- ----------------------------------------------------------------------------
--- Step 4: External Stage for Customer Data
+-- Step 3: External Stage for Customer Data
 -- ----------------------------------------------------------------------------
-CREATE OR REPLACE STAGE sales.external_stage.customer_stage
+CREATE OR REPLACE STAGE customer_stage
   URL = 's3://sales-cam-dev/external_stage/customer/'
-  FILE_FORMAT = sales.file_formats.parquet_format
+  FILE_FORMAT = parquet_format
   STORAGE_INTEGRATION = s3_int;
 
 -- ============================================================================
 -- FULL LOAD SECTION
 -- ============================================================================
-CREATE OR REPLACE TEMP TABLE sales_raw.customer_stage_temp AS
+CREATE OR REPLACE TEMP TABLE customer_stage_temp AS
 SELECT 
     $1:customer_id::INT AS customer_id,
     $1:customer_name::STRING AS customer_name,
@@ -47,19 +41,19 @@ SELECT
     $1:customer_type::STRING AS customer_type,
     $1:customer_region::STRING AS customer_region,
     TO_TIMESTAMP(($1:date_updated::NUMBER) / 1e9) AS date_updated
-FROM @sales.external_stage.customer_stage/customer.parquet;
+FROM @customer_stage/customer.parquet;
 
 -- Optional: Inspect data
-SELECT * FROM sales_raw.customer_stage_temp;
+SELECT * FROM customer_stage_temp;
 
 -- Load data into raw customer table
-INSERT INTO sales_raw.customer_raw
-SELECT * FROM sales_raw.customer_stage_temp;
+INSERT INTO customer_raw
+SELECT * FROM customer_stage_temp;
 
 -- ============================================================================
 -- INCREMENTAL LOAD SECTION
 -- ============================================================================
-CREATE OR REPLACE TEMP TABLE sales_raw.customer_stage_incr_temp AS
+CREATE OR REPLACE TEMP TABLE customer_stage_incr_temp AS
 SELECT 
     $1:customer_id::INT AS customer_id,
     $1:customer_name::STRING AS customer_name,
@@ -67,9 +61,9 @@ SELECT
     $1:customer_type::STRING AS customer_type,
     $1:customer_region::STRING AS customer_region,
     TO_TIMESTAMP(($1:date_updated::NUMBER) / 1e9) AS date_updated
-FROM @sales.external_stage.customer_stage/customer.parquet;
+FROM @customer_stage/customer.parquet;
 
-MERGE INTO sales_raw.customer_raw AS target
+MERGE INTO customer_raw AS target
 USING (
     SELECT 
         customer_id,
@@ -78,7 +72,7 @@ USING (
         customer_type,
         customer_region,
         date_updated
-    FROM sales_raw.customer_stage_incr_temp
+    FROM customer_stage_incr_temp
 ) AS src
 ON target.customer_id = src.customer_id
 WHEN MATCHED AND src.date_updated > target.date_updated THEN

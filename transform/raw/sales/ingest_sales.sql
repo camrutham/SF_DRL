@@ -44,7 +44,7 @@ SELECT
     TO_TIMESTAMP(($1:date_updated::NUMBER) / 1e9) AS date_updated
 FROM @sales_stage/sales.parquet;
 
-INSERT INTO sales.sales_raw.sales_raw
+INSERT INTO sales_raw
 SELECT * FROM sales_stage_temp;
 
 -- Optional: drop temp table (not necessary, auto-dropped)
@@ -65,7 +65,7 @@ SELECT
     TO_TIMESTAMP(($1:date_updated::NUMBER) / 1e9) AS date_updated
 FROM @sales_stage/sales.parquet;
 
-MERGE INTO sales_raw.sales_raw AS target
+MERGE INTO sales_raw AS target
 USING (
     SELECT 
         sale_line_ref_num,

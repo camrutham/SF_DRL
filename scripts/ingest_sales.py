@@ -70,31 +70,39 @@ def extract_sql_block(sql_text, mode):
         raise ValueError("❌ SQL must contain '-- FULL LOAD SECTION' and '-- INCREMENTAL LOAD SECTION'.")
     
     # Find section markers
-    setup_marker = "-- ============================================================================"
-    full_marker = "-- ============================================================================\n-- FULL LOAD SECTION"
-    incr_marker = "-- ============================================================================\n-- INCREMENTAL LOAD SECTION"
+    setup_start = "-- Step 1: File Format Definition"
+    full_marker = "-- FULL LOAD SECTION"
+    incr_marker = "-- INCREMENTAL LOAD SECTION"
     
     # Find section positions
-    setup_pos = sql_text.find(setup_marker)
+    setup_pos = sql_text.find(setup_start)
     full_pos = sql_text.find(full_marker)
     incr_pos = sql_text.find(incr_marker)
     
+    # Extract appropriate section and clean it
+    def clean_sql_section(text):
+        # Split into lines and filter
+        lines = []
+        for line in text.split('\n'):
+            line = line.strip()
+            # Keep CREATE statements and non-comment lines
+            if line and (line.startswith('CREATE') or not line.startswith('--')):
+                lines.append(line)
+        return '\n'.join(lines)
+    
     # Return appropriate section
     if mode == "setup":
-        # Everything from start to full load section, excluding setup marker
-        return sql_text[setup_pos + len(setup_marker):full_pos].strip()
+        # Extract setup statements (Step 1 through Step 3)
+        setup_section = sql_text[setup_pos:full_pos]
+        return clean_sql_section(setup_section)
     elif mode == "full":
-        # Everything between full and incremental sections, excluding full marker
-        section = sql_text[full_pos + len(full_marker):incr_pos].strip()
-        if section.startswith("--"):
-            section = section[section.find("\n") + 1:].strip()
-        return section
+        # Extract full load section
+        section = sql_text[full_pos:incr_pos]
+        return clean_sql_section(section)
     else:
-        # Everything after incremental section, excluding incremental marker
-        section = sql_text[incr_pos + len(incr_marker):].strip()
-        if section.startswith("--"):
-            section = section[section.find("\n") + 1:].strip()
-        return section
+        # Extract incremental load section
+        section = sql_text[incr_pos:]
+        return clean_sql_section(section)
 
 
 def execute_sql_statements(cur, sql_block):
@@ -153,11 +161,14 @@ def main():
         conn = connect_snowflake(cfg)
         cur = conn.cursor()
 
-        # Set execution context
+        # Set execution context for setup (use raw schema for all objects)
         cur.execute(f"USE ROLE {cfg['role']}")
         cur.execute(f"USE DATABASE {cfg['database']}")
         cur.execute(f"USE SCHEMA {cfg['schema_raw']}")
         cur.execute(f"USE WAREHOUSE {cfg['warehouse']}")
+
+        # Set up search path to include raw schema
+        cur.execute(f"ALTER SESSION SET SEARCH_PATH = {cfg['database']}.{cfg['schema_raw']}")
 
         cur.execute("SELECT CURRENT_DATABASE(), CURRENT_SCHEMA(), CURRENT_ROLE();")
         context = cur.fetchone()
@@ -172,6 +183,12 @@ def main():
         mode = "full" if full_refresh else "incremental"
         logging.info(f"▶ Running {mode.upper()} load from SQL file...")
         load_block = extract_sql_block(sql_text, mode)
+        
+        # Add schema to table references if not present
+        table_name = "sales_raw"
+        schema_prefix = f"{cfg['schema_raw']}."
+        load_block = load_block.replace(f" {table_name}", f" {schema_prefix}{table_name}")
+        
         execute_sql_statements(cur, load_block)
 
         conn.commit()
