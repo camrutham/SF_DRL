@@ -1,14 +1,20 @@
 {
   "sql_paths": {
     "sales": "transform/raw/sales",
-    "customer": "transform/raw/masterdata"
+    "customer": "transform/raw/masterdata",
+    "product": "transform/raw/masterdata",
+    "product_category": "transform/raw/masterdata"
   },
   "sql_files": {
     "sales": "ingest_sales.sql",
-    "customer": "ingest_customer.sql"
+    "customer": "ingest_customer.sql",
+    "product": "ingest_product.sql",
+    "product_category": "ingest_product_category.sql"
   },
   "target_tables": {
     "sales": "sales_raw",
-    "customer": "customer_raw"
+    "customer": "customer_raw",
+    "product": "product_raw",
+    "product_category": "product_category_raw"
   }
 }

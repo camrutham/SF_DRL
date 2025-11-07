@@ -211,34 +211,26 @@ def execute_sql_statements(cur, sql_block: str) -> None:
         logging.error(f"❌ Multi-statement execution failed: {e}", exc_info=True)
         raise
 
-def ingest_entity(entity_type: str, full_refresh: bool = False) -> None:
-    """Ingest data for a specific entity type."""
+def ingest_entity(entity_type: str, full_refresh: bool, conn) -> None:
+    """Ingest data for a specific entity type using a shared Snowflake connection."""
     start_time = datetime.now()
     log_file = setup_logging(entity_type)
     logging.info(f"🚀 Starting {entity_type.title()} ingestion process...")
-    
-    conn = None
     try:
         # Load config and get SQL file
         cfg = load_config()
         sql_file = get_sql_file_path(entity_type)
-        
+
         # Read SQL
         with open(sql_file, "r") as f:
             sql_text = f.read()
 
-        # Connect to Snowflake
-        conn = connect_snowflake(cfg)
         cur = conn.cursor()
-
-        # Set execution context
         snowflake_cfg = cfg["snowflake"]
         cur.execute(f"USE ROLE {snowflake_cfg['role']}")
         cur.execute(f"USE DATABASE {snowflake_cfg['database']}")
         cur.execute(f"USE SCHEMA {snowflake_cfg['schema_raw']}")
         cur.execute(f"USE WAREHOUSE {snowflake_cfg['warehouse']}")
-        
-        # Set up search path to include raw schema
         cur.execute(f"ALTER SESSION SET SEARCH_PATH = {snowflake_cfg['database']}.{snowflake_cfg['schema_raw']}")
 
         cur.execute("SELECT CURRENT_DATABASE(), CURRENT_SCHEMA(), CURRENT_ROLE();")
@@ -254,13 +246,13 @@ def ingest_entity(entity_type: str, full_refresh: bool = False) -> None:
         mode = "full" if full_refresh else "incremental"
         logging.info(f"▶ Running {mode.upper()} load from SQL file...")
         load_block = extract_sql_block(sql_text, mode)
-        
+
         # Add schema to table references if not present
         if entity_type in Config.TARGET_TABLES:
             table_name = Config.TARGET_TABLES[entity_type]
             schema_prefix = f"{snowflake_cfg['schema_raw']}."
             load_block = load_block.replace(f" {table_name}", f" {schema_prefix}{table_name}")
-        
+
         execute_sql_statements(cur, load_block)
 
         conn.commit()
@@ -270,9 +262,6 @@ def ingest_entity(entity_type: str, full_refresh: bool = False) -> None:
         logging.error(f"❌ Ingestion failed: {e}", exc_info=True)
         raise
     finally:
-        if conn:
-            conn.close()
-            logging.info("🔒 Connection closed.")
         duration = (datetime.now() - start_time).total_seconds()
         logging.info(f"⏱️ Duration: {duration:.2f}s")
         logging.info(f"📄 Log file saved at: {log_file}")
@@ -325,15 +314,20 @@ def main():
             print(f"  - {entity}")
         sys.exit(1)
     
-    # Process each entity
+    # Create a single Snowflake connection for all entities
+    cfg = load_config()
+    conn = connect_snowflake(cfg)
     success = True
-    for entity in entities_to_process:
-        try:
-            ingest_entity(entity, args.full_refresh)
-        except Exception as e:
-            print(f"❌ Error processing {entity}: {str(e)}")
-            success = False
-    
+    try:
+        for entity in entities_to_process:
+            try:
+                ingest_entity(entity, args.full_refresh, conn)
+            except Exception as e:
+                print(f"❌ Error processing {entity}: {str(e)}")
+                success = False
+    finally:
+        conn.close()
+        logging.info("🔒 Connection closed.")
     sys.exit(0 if success else 1)
 
 if __name__ == "__main__":

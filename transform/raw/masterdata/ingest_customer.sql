@@ -18,9 +18,6 @@ SELECT
     TO_TIMESTAMP(($1:date_updated::NUMBER) / 1e9) AS date_updated
 FROM @customer_stage/customer.parquet;
 
--- Optional: Inspect data
-SELECT * FROM customer_stage_temp;
-
 -- Load data into raw customer table
 INSERT INTO customer_raw
 SELECT * FROM customer_stage_temp;

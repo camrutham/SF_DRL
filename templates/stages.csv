@@ -1,3 +1,5 @@
 name,url,file_format,storage_integration,comment
 sales_stage,s3://sales-cam-dev/external_stage/sales/,parquet_format,s3_int,Stage for sales parquet files
 customer_stage,s3://sales-cam-dev/external_stage/customer/,parquet_format,s3_int,Stage for customer parquet files
+product_stage,s3://sales-cam-dev/external_stage/product/,parquet_format,s3_int,Stage for product paruet files
+product_category_stage,s3://sales-cam-dev/external_stage/product_category/,parquet_format,s3_int,Stage for product cat paruet files

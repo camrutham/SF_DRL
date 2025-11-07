@@ -1,0 +1,23 @@
+table_name: product_raw
+description: Product master data.
+
+columns:
+  - name: PRODUCT_ID
+    type: NUMBER
+    nullable: false
+    description: Unique identifier for each customer.
+
+  - name: PRODUCT_NAME
+    type: STRING
+    nullable: false
+    description: Full name of the Product.
+
+  - name: PRODUCT_CAT_ID
+    type: NUMBER
+    nullable: true
+    description: PROD Category ID associated with the product.
+
+  - name: DATE_UPDATED
+    type: TIMESTAMP
+    nullable: true
+    description: Date and time when the product record was last updated.
