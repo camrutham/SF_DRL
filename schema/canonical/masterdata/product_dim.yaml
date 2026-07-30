@@ -1,23 +1,95 @@
-table_name: product_dim
-description: Product master data.
+table_name: PRODUCT_DIM
+
+schema: SALES_CANONICAL
+
+description: Product dimension (SCD Type 2).
+
+source:
+  table: PRODUCT_RAW
 
 columns:
-  - name: PRODUCT_ID
-    type: NUMBER
+
+  - name: SRC_SYS_ID
+    type: NUMBER(38,0)
     nullable: false
-    description: Unique identifier for each customer.
+    description: Source system identifier (same as PRODUCT_ID)
+
+  - name: PRODUCT_ID
+    type: STRING
+    nullable: false
+
+  - name: PRODUCT_CODE
+    type: STRING
+    nullable: false
 
   - name: PRODUCT_NAME
     type: STRING
     nullable: false
-    description: Full name of the Product.
 
-  - name: PRODUCT_CATEGORY_NAME
+  - name: PRODUCT_NAME_NORMALIZED
     type: STRING
     nullable: true
-    description: PROD Category name associated with the product.
+
+  - name: PRODUCT_CATEGORY
+    type: STRING
+    nullable: true
+
+  - name: PRODUCT_SUBCATEGORY
+    type: STRING
+    nullable: true
+
+  - name: BRAND
+    type: STRING
+    nullable: true
+
+  - name: MANUFACTURER
+    type: STRING
+    nullable: true
+
+  - name: UNIT_PRICE
+    type: NUMBER(18,2)
+    nullable: true
+
+  - name: PRODUCT_STATUS
+    type: STRING
+    nullable: true
+
+  - name: SRC_SYS_DATE_CREATED
+    type: TIMESTAMP_NTZ
+    nullable: false
+
+  - name: SRC_SYS_DATE_UPDATED
+    type: TIMESTAMP_NTZ
+    nullable: false
+
+  - name: EFFECTIVE_START_DATE
+    type: DATE
+    nullable: false
+
+  - name: EFFECTIVE_END_DATE
+    type: DATE
+    nullable: false
+
+  - name: LATEST_FLAG
+    type: BOOLEAN
+    nullable: false
+
+  - name: DATE_CREATED
+    type: TIMESTAMP_NTZ
+    nullable: false
 
   - name: DATE_UPDATED
-    type: TIMESTAMP
-    nullable: true
-    description: Date and time when the product record was last updated.
+    type: TIMESTAMP_NTZ
+    nullable: false
+
+  - name: SOURCE_SYSTEM
+    type: STRING
+    nullable: false
+
+primary_key:
+  columns:
+    - SRC_SYS_ID
+
+clustering_keys:
+  - SRC_SYS_ID
+  - LATEST_FLAG

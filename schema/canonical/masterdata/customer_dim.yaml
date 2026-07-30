@@ -1,33 +1,104 @@
-table_name: customer_dim
-description: Customer master data containing customer details and region mapping.
+table_name: CUSTOMER_DIM
+
+schema: SALES_CANONICAL
+
+description: Customer dimension (SCD Type 2).
+
+source:
+  table: CUSTOMER_RAW
 
 columns:
-  - name: CUSTOMER_ID
-    type: NUMBER
+
+  - name: SRC_SYS_ID
+    type: NUMBER(38,0)
     nullable: false
-    description: Unique identifier for each customer.
+    description: Source system identifier (same as CUSTOMER_ID)
+
+  - name: CUSTOMER_ID
+    type: STRING
+    nullable: false
+    description: Customer business identifier
+
+  - name: CUSTOMER_NUMBER
+    type: STRING
+    nullable: false
 
   - name: CUSTOMER_NAME
     type: STRING
     nullable: false
-    description: Full name of the customer.
 
-  - name: CUSTOMER_STATE
+  - name: CUSTOMER_NAME_NORMALIZED
     type: STRING
     nullable: true
-    description: State where the customer is located.
 
   - name: CUSTOMER_TYPE
     type: STRING
     nullable: true
-    description: Category or segment of the customer (e.g., Retail, Wholesale, Corporate).
 
-  - name: CUSTOMER_REGION
+  - name: INDUSTRY
     type: STRING
     nullable: true
-    description: Geographical region to which the customer belongs (e.g., North, South, East, West).
+
+  - name: ADDRESS
+    type: STRING
+    nullable: true
+
+  - name: CITY
+    type: STRING
+    nullable: true
+
+  - name: STATE
+    type: STRING
+    nullable: true
+
+  - name: COUNTRY
+    type: STRING
+    nullable: true
+
+  - name: EMAIL
+    type: STRING
+    nullable: true
+
+  - name: PHONE
+    type: STRING
+    nullable: true
+
+  - name: SRC_SYS_DATE_CREATED
+    type: TIMESTAMP_NTZ
+    nullable: false
+
+  - name: SRC_SYS_DATE_UPDATED
+    type: TIMESTAMP_NTZ
+    nullable: false
+
+  - name: EFFECTIVE_START_DATE
+    type: DATE
+    nullable: false
+
+  - name: EFFECTIVE_END_DATE
+    type: DATE
+    nullable: false
+
+  - name: LATEST_FLAG
+    type: BOOLEAN
+    nullable: false
+
+  - name: DATE_CREATED
+    type: TIMESTAMP_NTZ
+    nullable: false
 
   - name: DATE_UPDATED
-    type: TIMESTAMP
-    nullable: true
-    description: Date and time when the customer record was last updated.
+    type: TIMESTAMP_NTZ
+    nullable: false
+
+  - name: SOURCE_SYSTEM
+    type: STRING
+    nullable: false
+
+primary_key:
+  columns:
+    - SRC_SYS_ID
+
+clustering_keys:
+  - SRC_SYS_ID
+  - LATEST_FLAG

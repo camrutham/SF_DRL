@@ -1,0 +1,55 @@
+table_name: CUSTOMER_ANALYTICS
+
+schema: SALES_CURATED
+
+description: Customer level analytical metrics.
+
+source:
+  tables:
+    - CUSTOMER_DIM
+    - SALES_FACT
+
+columns:
+
+  - name: CUSTOMER_ID
+    type: NUMBER(38,0)
+
+  - name: CUSTOMER_NAME
+    type: STRING
+
+  - name: CUSTOMER_TYPE
+    type: STRING
+
+  - name: TOTAL_ORDERS
+    type: NUMBER
+
+  - name: TOTAL_QTY
+    type: NUMBER(18,2)
+
+  - name: TOTAL_GROSS_SALES
+    type: NUMBER(18,2)
+
+  - name: TOTAL_NET_AMOUNT
+    type: NUMBER(18,2)
+
+  - name: TOTAL_DISCOUNT
+    type: NUMBER(18,2)
+
+  - name: AVG_DISCOUNT_PERCENT
+    type: NUMBER(9,4)
+
+  - name: FIRST_PURCHASE_DATE
+    type: DATE
+
+  - name: LAST_PURCHASE_DATE
+    type: DATE
+
+  - name: HIGH_SEVERITY_COUNT
+    type: NUMBER
+
+  - name: ETL_DATE_CREATED
+    type: TIMESTAMP_NTZ
+
+primary_key:
+  columns:
+    - CUSTOMER_ID

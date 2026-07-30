@@ -1,23 +1,76 @@
-table_name: product_raw
-description: Product master data.
+table_name: PRODUCT
+
+schema: SALES_RAW
+
+description: Product master raw table.
+
+source:
+  table: PRODUCT
 
 columns:
+
   - name: PRODUCT_ID
-    type: NUMBER
+    type: NUMBER(38,0)
     nullable: false
-    description: Unique identifier for each customer.
+    description: Unique product identifier
+
+  - name: PRODUCT_CODE
+    type: VARCHAR(30)
+    nullable: false
+    description: Business product code
 
   - name: PRODUCT_NAME
-    type: STRING
+    type: VARCHAR(200)
     nullable: false
-    description: Full name of the Product.
+    description: Product name
 
-  - name: PRODUCT_CAT_ID
-    type: NUMBER
+  - name: PRODUCT_CATEGORY
+    type: VARCHAR(100)
     nullable: true
-    description: PROD Category ID associated with the product.
+    description: Product category
+
+  - name: PRODUCT_SUBCATEGORY
+    type: VARCHAR(100)
+    nullable: true
+    description: Product subcategory
+
+  - name: BRAND
+    type: VARCHAR(100)
+    nullable: true
+    description: Product brand
+
+  - name: MANUFACTURER
+    type: VARCHAR(200)
+    nullable: true
+    description: Product manufacturer
+
+  - name: UNIT_PRICE
+    type: NUMBER(18,2)
+    nullable: true
+    description: Product unit price
+
+  - name: PRODUCT_STATUS
+    type: VARCHAR(30)
+    nullable: true
+    description: Product status
+
+  - name: DATE_CREATED
+    type: TIMESTAMP_NTZ
+    nullable: false
+    description: Source record creation timestamp
 
   - name: DATE_UPDATED
-    type: TIMESTAMP
-    nullable: true
-    description: Date and time when the product record was last updated.
+    type: TIMESTAMP_NTZ
+    nullable: false
+    description: Source record last update timestamp
+
+primary_key:
+  columns:
+    - PRODUCT_ID
+
+partition_columns:
+  - DATE_UPDATED
+
+clustering_keys:
+  - PRODUCT_ID
+  - DATE_UPDATED

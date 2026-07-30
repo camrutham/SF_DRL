@@ -1,34 +1,142 @@
 table_name: SALES_FACT
-description: Sales fact table containing sales transactions linked to customers and products.
+
+schema: SALES_CANONICAL
+
+description: Consolidated sales fact table combining Direct and Indirect Sales.
+
+source:
+  tables:
+    - DIRECT_SALE_LINES_RAW
+    - INDIRECT_SALE_LINES_RAW
+
 columns:
-  - name: SALE_LINE_REF_NUM
-    type: INT
-    constraints: "PRIMARY KEY"
+
+  #----------------------------------------------------------
+  # Business Keys
+  #----------------------------------------------------------
+
+  - name: SRC_SYS_ID
+    type: NUMBER(38,0)
+    nullable: false
+    description: Source system identifier (same as SALE_LINE_ID)
+
+  - name: SALE_LINE_ID
+    type: STRING
+    nullable: false
+    description: Business sale line identifier
 
   - name: CUSTOMER_ID
-    type: INT
-    constraints: "NOT NULL"
+    type: NUMBER(38,0)
+    nullable: false
 
   - name: PRODUCT_ID
-    type: INT
-    constraints: "NOT NULL"
+    type: NUMBER(38,0)
+    nullable: false
 
-  - name: SALES_AMOUNT
-    type: DECIMAL(12,2)
-    constraints: "NOT NULL"
+  - name: CONTRACT_ID
+    type: NUMBER(38,0)
+    nullable: false
 
-  - name: SALE_QTY
-    type: INT
-    constraints: "NOT NULL"
+  - name: SUBMISSION_ID
+    type: NUMBER(38,0)
+    nullable: true
 
-  - name: REGION
-    type: VARCHAR(50)
-    constraints: ""
+  #----------------------------------------------------------
+  # Transaction Details
+  #----------------------------------------------------------
 
-  - name: ORDER_DATE
+  - name: SALE_TYPE
+    type: STRING
+    nullable: false
+    description: DIRECT or INDIRECT
+
+  - name: INV_DATE
     type: DATE
-    constraints: "NOT NULL"
+    nullable: false
 
-  - name: DATE_UPDATED
-    type: TIMESTAMP
-    default: "DEFAULT CURRENT_TIMESTAMP"
+  - name: INV_QTY
+    type: NUMBER(18,2)
+    nullable: false
+
+  - name: INV_AMT
+    type: NUMBER(18,2)
+    nullable: false
+
+  - name: DISC_REQUESTED
+    type: NUMBER(18,2)
+    nullable: true
+
+  - name: DISC_PAID
+    type: NUMBER(18,2)
+    nullable: true
+
+  - name: LINE_SEVERITY
+    type: STRING
+    nullable: true
+
+  #----------------------------------------------------------
+  # Calculated Measures
+  #----------------------------------------------------------
+
+  - name: GROSS_SALES
+    type: NUMBER(18,2)
+    nullable: false
+    description: Equal to INV_AMT
+
+  - name: NET_AMOUNT
+    type: NUMBER(18,2)
+    nullable: false
+    description: INV_AMT - DISC_PAID
+
+  - name: DISCOUNT_AMOUNT
+    type: NUMBER(18,2)
+    nullable: false
+    description: Equal to DISC_PAID
+
+  - name: DISCOUNT_PERCENT
+    type: NUMBER(9,4)
+    nullable: true
+    description: (DISC_PAID / INV_AMT) * 100
+
+  - name: LINE_SEVERITY_FLAG
+    type: BOOLEAN
+    nullable: false
+    description: Indicates whether the line has high severity
+
+  #----------------------------------------------------------
+  # Source Audit
+  #----------------------------------------------------------
+
+  - name: SRC_SYS_DATE_CREATED
+    type: TIMESTAMP_NTZ
+    nullable: false
+
+  - name: SRC_SYS_DATE_UPDATED
+    type: TIMESTAMP_NTZ
+    nullable: false
+
+  #----------------------------------------------------------
+  # ETL Audit
+  #----------------------------------------------------------
+
+  - name: ETL_DATE_CREATED
+    type: TIMESTAMP_NTZ
+    nullable: false
+
+  - name: ETL_DATE_UPDATED
+    type: TIMESTAMP_NTZ
+    nullable: false
+
+  - name: SOURCE_SYSTEM
+    type: STRING
+    nullable: false
+
+primary_key:
+  columns:
+    - SRC_SYS_ID
+
+clustering_keys:
+  - INV_DATE
+  - CUSTOMER_ID
+  - PRODUCT_ID
+  - CONTRACT_ID

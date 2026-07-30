@@ -1,0 +1,88 @@
+table_name: INDIRECT_SALE_LINES_RAW
+
+schema: SALES_RAW
+
+description: Indirect sales transaction raw table.
+
+source:
+  table: INDIRECT_SALE_LINES
+
+columns:
+
+  - name: SALE_LINE_ID
+    type: NUMBER(38,0)
+    nullable: false
+    description: Sale line identifier
+
+  - name: INV_DATE
+    type: DATE
+    nullable: false
+    description: Invoice date
+
+  - name: INV_QTY
+    type: NUMBER(18,2)
+    nullable: false
+    description: Invoice quantity
+
+  - name: INV_AMT
+    type: NUMBER(18,2)
+    nullable: false
+    description: Invoice amount
+
+  - name: CONTRACT_ID
+    type: NUMBER(38,0)
+    nullable: false
+    description: Contract identifier
+
+  - name: PRODUCT_ID
+    type: NUMBER(38,0)
+    nullable: false
+    description: Product identifier
+
+  - name: CUSTOMER_ID
+    type: NUMBER(38,0)
+    nullable: false
+    description: Customer identifier
+
+  - name: DISC_REQUESTED
+    type: NUMBER(18,2)
+    nullable: true
+    description: Requested discount
+
+  - name: DISC_PAID
+    type: NUMBER(18,2)
+    nullable: true
+    description: Paid discount
+
+  - name: SUBMISSION_ID
+    type: NUMBER(38,0)
+    nullable: true
+    description: Submission identifier
+
+  - name: LINE_SEVERITY
+    type: VARCHAR(30)
+    nullable: true
+    description: Severity level
+
+  - name: DATE_CREATED
+    type: TIMESTAMP_NTZ
+    nullable: false
+    description: Source record creation timestamp
+
+  - name: DATE_UPDATED
+    type: TIMESTAMP_NTZ
+    nullable: false
+    description: Source record last update timestamp
+
+primary_key:
+  columns:
+    - SALE_LINE_ID
+
+partition_columns:
+  - INV_DATE
+
+clustering_keys:
+  - CUSTOMER_ID
+  - PRODUCT_ID
+  - CONTRACT_ID
+  - INV_DATE

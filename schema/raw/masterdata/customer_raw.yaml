@@ -1,33 +1,76 @@
-table_name: customer_raw
-description: Customer master data containing customer details and region mapping.
+table_name: CUSTOMER_RAW
+
+schema: SALES_RAW
+
+description: Customer master raw table.
+
+source:
+  table: CUSTOMER
 
 columns:
+
   - name: CUSTOMER_ID
-    type: NUMBER
+    type: NUMBER(38,0)
     nullable: false
-    description: Unique identifier for each customer.
+    description: Customer identifier
+
+  - name: CUSTOMER_NUMBER
+    type: VARCHAR(30)
+    nullable: false
+    description: Business customer number
 
   - name: CUSTOMER_NAME
-    type: STRING
+    type: VARCHAR(200)
     nullable: false
-    description: Full name of the customer.
-
-  - name: CUSTOMER_STATE
-    type: STRING
-    nullable: true
-    description: State where the customer is located.
+    description: Customer name
 
   - name: CUSTOMER_TYPE
-    type: STRING
+    type: VARCHAR(50)
     nullable: true
-    description: Category or segment of the customer (e.g., Retail, Wholesale, Corporate).
 
-  - name: CUSTOMER_REGION
-    type: STRING
+  - name: INDUSTRY
+    type: VARCHAR(100)
     nullable: true
-    description: Geographical region to which the customer belongs (e.g., North, South, East, West).
+
+  - name: ADDRESS
+    type: VARCHAR(500)
+    nullable: true
+
+  - name: CITY
+    type: VARCHAR(100)
+    nullable: true
+
+  - name: STATE
+    type: VARCHAR(100)
+    nullable: true
+
+  - name: COUNTRY
+    type: VARCHAR(100)
+    nullable: true
+
+  - name: EMAIL
+    type: VARCHAR(255)
+    nullable: true
+
+  - name: PHONE
+    type: VARCHAR(30)
+    nullable: true
+
+  - name: DATE_CREATED
+    type: TIMESTAMP_NTZ
+    nullable: false
 
   - name: DATE_UPDATED
-    type: TIMESTAMP
-    nullable: true
-    description: Date and time when the customer record was last updated.
+    type: TIMESTAMP_NTZ
+    nullable: false
+
+primary_key:
+  columns:
+    - CUSTOMER_ID
+
+partition_columns:
+  - DATE_UPDATED
+
+clustering_keys:
+  - CUSTOMER_ID
+  - DATE_UPDATED

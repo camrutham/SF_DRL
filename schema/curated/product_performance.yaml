@@ -1,0 +1,52 @@
+table_name: PRODUCT_PERFORMANCE
+
+schema: SALES_CURATED
+
+description: Product performance metrics.
+
+source:
+  tables:
+    - PRODUCT_DIM
+    - SALES_FACT
+
+columns:
+
+  - name: PRODUCT_ID
+    type: NUMBER(38,0)
+
+  - name: PRODUCT_NAME
+    type: STRING
+
+  - name: PRODUCT_CATEGORY
+    type: STRING
+
+  - name: BRAND
+    type: STRING
+
+  - name: TOTAL_QTY
+    type: NUMBER(18,2)
+
+  - name: TOTAL_GROSS_SALES
+    type: NUMBER(18,2)
+
+  - name: TOTAL_NET_AMOUNT
+    type: NUMBER(18,2)
+
+  - name: TOTAL_DISCOUNT
+    type: NUMBER(18,2)
+
+  - name: AVG_DISCOUNT_PERCENT
+    type: NUMBER(9,4)
+
+  - name: TOTAL_TRANSACTIONS
+    type: NUMBER
+
+  - name: HIGH_SEVERITY_COUNT
+    type: NUMBER
+
+  - name: ETL_DATE_CREATED
+    type: TIMESTAMP_NTZ
+
+primary_key:
+  columns:
+    - PRODUCT_ID

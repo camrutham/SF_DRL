@@ -1,0 +1,56 @@
+table_name: SALES_SUMMARY
+
+schema: SALES_CURATED
+
+description: Aggregated sales summary for business reporting.
+
+source:
+  table: SALES_FACT
+
+columns:
+
+  - name: SALES_DATE
+    type: DATE
+
+  - name: CUSTOMER_ID
+    type: NUMBER(38,0)
+
+  - name: PRODUCT_ID
+    type: NUMBER(38,0)
+
+  - name: CONTRACT_ID
+    type: NUMBER(38,0)
+
+  - name: SALE_TYPE
+    type: STRING
+
+  - name: TOTAL_QTY
+    type: NUMBER(18,2)
+
+  - name: TOTAL_GROSS_SALES
+    type: NUMBER(18,2)
+
+  - name: TOTAL_NET_AMOUNT
+    type: NUMBER(18,2)
+
+  - name: TOTAL_DISCOUNT
+    type: NUMBER(18,2)
+
+  - name: AVG_DISCOUNT_PERCENT
+    type: NUMBER(9,4)
+
+  - name: SALES_COUNT
+    type: NUMBER
+
+  - name: HIGH_SEVERITY_LINES
+    type: NUMBER
+
+  - name: ETL_DATE_CREATED
+    type: TIMESTAMP_NTZ
+
+primary_key:
+  columns:
+    - SALES_DATE
+    - CUSTOMER_ID
+    - PRODUCT_ID
+    - CONTRACT_ID
