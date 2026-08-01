@@ -1,14 +1,19 @@
 {
   "snowflake": {
-    "account": "IJIPYSX-XZ71784",
-    "user": "chandu2103",
-    "password": "Snowflake@20156606",
+    "account": "QRVKHLX-JM60697",
+    "user": "SHEKERCAM",
+    "password": "Amrutham@20156606",
     "database": "sales",
     "schema_raw": "sales_raw",
     "schema_canonical": "sales_canonical",
     "schema_curated": "sales_curated",
-    "warehouse": "adhoc_wh",
+    "warehouse": "compute_wh",
     "role": "ACCOUNTADMIN"
+  },
+  "copy": {
+    "default_schema": "sales_raw",
+    "storage_integration": "drl_sf_s3_int",
+    "file_format": "parquet_format"
   },
   "directories": {
     "config": "config",

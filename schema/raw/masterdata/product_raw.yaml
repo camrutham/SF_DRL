@@ -1,4 +1,4 @@
-table_name: PRODUCT
+table_name: PRODUCT_RAW
 
 schema: SALES_RAW
 

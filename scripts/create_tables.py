@@ -10,21 +10,22 @@ config_path = Path(__file__).resolve().parent / "config.json"
 with open(config_path, "r") as f:
     config = json.load(f)
 
-db_name = config["database"]
-schema_raw = config["schema_raw"]
-schema_canonical = config["schema_canonical"]
-schema_curated = config["schema_curated"]
-warehouse = config["warehouse"]
-role = config["role"]
+snowflake_cfg = config.get("snowflake", config)
+db_name = snowflake_cfg["database"]
+schema_raw = snowflake_cfg["schema_raw"]
+schema_canonical = snowflake_cfg["schema_canonical"]
+schema_curated = snowflake_cfg["schema_curated"]
+warehouse = snowflake_cfg["warehouse"]
+role = snowflake_cfg.get("role")
 
 print(f"📘 Loaded config: DB={db_name}, WH={warehouse}, Role={role}")
 
 
 # --- Step 2: Connect to Snowflake ---
 conn = snowflake.connector.connect(
-    user="chandu2103",
-    password="Snowflake@20156606",
-    account="IJIPYSX-XZ71784",
+    user=snowflake_cfg["user"],
+    password=snowflake_cfg["password"],
+    account=snowflake_cfg["account"],
     warehouse=warehouse,
     role=role
 )
@@ -68,10 +69,31 @@ for yaml_path in base_dir.rglob("*.yaml"):
         continue
 
     # --- Step 6: Construct CREATE TABLE statement ---
-    column_defs = ",\n  ".join([f"{col['name']} {col['type']}" for col in columns])
+    primary_key = table_def.get("primary_key") or {}
+    pk_columns = []
+    if isinstance(primary_key, dict):
+        pk_columns = primary_key.get("columns", []) or []
+    elif isinstance(primary_key, list):
+        pk_columns = primary_key
+    pk_columns = [str(col) for col in pk_columns]
+
+    pk_name_set = set(pk_columns)
+    column_defs = []
+    for col in columns:
+        col_name = col["name"]
+        col_sql = f"{col_name} {col['type']}"
+        if col.get("nullable") is False or col_name in pk_name_set:
+            col_sql += " NOT NULL"
+        column_defs.append(f"  {col_sql}")
+
+    table_constraints = []
+    if pk_columns:
+        table_constraints.append(f"  PRIMARY KEY ({', '.join(pk_columns)})")
+
+    create_body = ",\n".join(column_defs + table_constraints)
     create_stmt = f"""
     CREATE TABLE IF NOT EXISTS {db_name}.{schema_name}.{table_name} (
-      {column_defs}
+{create_body}
     )
     """
 

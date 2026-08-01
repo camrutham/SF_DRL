@@ -1,2 +1,2 @@
 name,storage_provider,enabled,storage_aws_role_arn,storage_allowed_locations,comment
-s3_int,S3,TRUE,arn:aws:iam::849107555298:role/aws_s3_sf_int,s3://sales-cam-dev/external_stage/,Integration between Snowflake and S3 for data ingestion
+drl_sf_s3_int,S3,TRUE,arn:aws:iam::372468808581:role/drl-softflake-s3-integration,s3://drl-landing/mysql/drl_dev/,Integration between Snowflake and S3 for data ingestion

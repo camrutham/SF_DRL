@@ -1,5 +1,6 @@
 name,url,file_format,storage_integration,comment
-sales_stage,s3://sales-cam-dev/external_stage/sales/,parquet_format,s3_int,Stage for sales parquet files
-customer_stage,s3://sales-cam-dev/external_stage/customer/,parquet_format,s3_int,Stage for customer parquet files
-product_stage,s3://sales-cam-dev/external_stage/product/,parquet_format,s3_int,Stage for product paruet files
-product_category_stage,s3://sales-cam-dev/external_stage/product_category/,parquet_format,s3_int,Stage for product cat paruet files
+direct_sales_stage,s3://drl-landing/mysql/drl_dev/direct_sale_lines/,parquet_format,drl_sf_s3_int,Stage for direct sales parquet files
+indirect_sales_stage,s3://drl-landing/mysql/drl_dev/indirect_sale_lines/,parquet_format,drl_sf_s3_int,Stage for direct sales parquet files
+contract_stage,s3://drl-landing/mysql/drl_dev/contract/,parquet_format,drl_sf_s3_int,Stage for direct sales parquet files
+customer_stage,s3://drl-landing/mysql/drl_dev/customer/,parquet_format,drl_sf_s3_int,Stage for direct sales parquet files
+product_stage,s3://drl-landing/mysql/drl_dev/product/,parquet_format,drl_sf_s3_int,Stage for direct sales parquet files

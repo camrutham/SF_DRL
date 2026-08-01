@@ -9,12 +9,13 @@ config_path = Path(__file__).resolve().parent / "config.json"
 with open(config_path, "r") as f:
     config = json.load(f)
 
-db_name = config["database"]
-schema_raw = config["schema_raw"]
-schema_canonical = config["schema_canonical"]
-schema_curated = config["schema_curated"]
-warehouse = config["warehouse"]
-role = config["role"]
+snowflake_cfg = config.get("snowflake", config)
+db_name = snowflake_cfg["database"]
+schema_raw = snowflake_cfg["schema_raw"]
+schema_canonical = snowflake_cfg["schema_canonical"]
+schema_curated = snowflake_cfg["schema_curated"]
+warehouse = snowflake_cfg["warehouse"]
+role = snowflake_cfg.get("role")
 
 print(f"📘 Loaded config: DB={db_name}, WH={warehouse}, Role={role}")
 print(f"📘 Config loaded: {db_name}.{schema_raw}")
@@ -22,10 +23,11 @@ print(f"📘 Config loaded: {db_name}.{schema_canonical}")
 print(f"📘 Config loaded: {db_name}.{schema_curated}")
 
 conn = snowflake.connector.connect(
-    user="chandu2103",
-    password="Snowflake@20156606",
-    account="IJIPYSX-XZ71784",
-    warehouse=warehouse
+    user=snowflake_cfg["user"],
+    password=snowflake_cfg["password"],
+    account=snowflake_cfg["account"],
+    warehouse=warehouse,
+    role=role
 )
 
 cur = conn.cursor()
