@@ -1,0 +1,27 @@
+name: "sf_e2e"
+version: "1.0.0"
+config-version: 2
+
+profile: "sf_e2e"
+
+model-paths: ["models"]
+analysis-paths: ["analyses"]
+test-paths: ["tests"]
+seed-paths: ["seeds"]
+macro-paths: ["macros"]
+snapshot-paths: ["snapshots"]
+
+target-path: "target"
+clean-targets:
+  - "target"
+  - "dbt_packages"
+  - "logs"
+
+models:
+  sf_e2e:
+    +materialized: table
+    staging:
+      +materialized: view
+      +schema: sales_raw
+    canonical:
+      +schema: sales_canonical

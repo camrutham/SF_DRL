@@ -1,12 +1,43 @@
 import subprocess
 import sys
+from pathlib import Path
 
-# Run schema_orchestrator.py first
-print("Running schema_orchestrator.py...")
-schema_result = subprocess.run([sys.executable, "scripts/schema_orchestrator.py"], check=True)
+ROOT_DIR = Path(__file__).resolve().parent.parent
 
-# Run ingest_data.py next
-print("Running ingest_data.py...")
-ingest_result = subprocess.run([sys.executable, "scripts/ingest_data.py"], check=True)
 
-print("All steps completed.")
+def run_step(step_name: str, command: list[str]) -> None:
+    print(f"\n===== Running {step_name} =====")
+    result = subprocess.run(command, cwd=str(ROOT_DIR), check=False)
+    if result.returncode != 0:
+        raise SystemExit(f"{step_name} failed with exit code {result.returncode}")
+
+
+# 1. Create schemas / setup objects
+run_step("schema_orchestrator.py", [sys.executable, "scripts/schema_orchestrator.py"])
+
+# 2. Load raw data from source to Snowflake raw tables
+run_step("ingest_data.py", [sys.executable, "scripts/ingest_data.py"])
+
+# 3. Run dbt models for raw-to-canonical load
+run_step(
+    "dbt run",
+    [
+        "dbt",
+        "run",
+        "--profiles-dir",
+        str(ROOT_DIR),
+        "--project-dir",
+        str(ROOT_DIR),
+        "--select",
+        "sf_e2e.staging.stg_direct_sales",
+        "sf_e2e.staging.stg_indirect_sales",
+        "sf_e2e.canonical.dim_customer",
+        "sf_e2e.canonical.dim_product",
+        "sf_e2e.canonical.dim_contract",
+        "sf_e2e.canonical.sales_fact_direct",
+        "sf_e2e.canonical.sales_fact_indirect",
+        "sf_e2e.canonical.sales_fact",
+    ],
+)
+
+print("\nAll workflow steps completed successfully.")
