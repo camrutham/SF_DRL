@@ -37,6 +37,9 @@ run_step(
         "sf_e2e.canonical.sales_fact_direct",
         "sf_e2e.canonical.sales_fact_indirect",
         "sf_e2e.canonical.sales_fact",
+        "sf_e2e.curated.customer_analytics",
+        "sf_e2e.curated.product_performance",
+        "sf_e2e.curated.sales_summary",
     ],
 )
 

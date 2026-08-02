@@ -25,3 +25,5 @@ models:
       +schema: sales_raw
     canonical:
       +schema: sales_canonical
+    curated:
+      +schema: sales_curated

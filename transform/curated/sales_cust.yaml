@@ -1,9 +1,0 @@
-table_name: SALES_RAW
-columns:
-  - name: CUSTOMER_ID
-    type: INT
-    constraints: "NOT NULL"
-
-  - name: SALES_AMOUNT
-    type: DECIMAL(12,2)
-    constraints: "NOT NULL"
