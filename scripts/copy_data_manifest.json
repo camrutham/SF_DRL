@@ -31,7 +31,8 @@
       "source_prefix": "s3://drl-landing/mysql/drl_dev/direct_sale_lines/",
       "table": "DIRECT_SALE_LINES_RAW",
       "schema": "SALES_RAW",
-      "stage_name": "SALES_STAGE",
+      "stage_name": "DIRECT_SALES_STAGE",
+      "pipe_name": "DIRECT_SALE_LINES_RAW_PIPE",
       "pattern": ".*\\.parquet$",
       "file_format": "parquet_format"
     },
@@ -39,7 +40,8 @@
       "source_prefix": "s3://drl-landing/mysql/drl_dev/indirect_sale_lines/",
       "table": "INDIRECT_SALE_LINES_RAW",
       "schema": "SALES_RAW",
-      "stage_name": "SALES_STAGE",
+      "stage_name": "INDIRECT_SALES_STAGE",
+      "pipe_name": "INDIRECT_SALE_LINES_RAW_PIPE",
       "pattern": ".*\\.parquet$",
       "file_format": "parquet_format"
     }

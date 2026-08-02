@@ -69,6 +69,20 @@ def build_copy_sql(database, schema, stage_name, table_name, file_format, patter
     """.strip()
 
 
+def build_pipe_sql(database, schema, pipe_name, stage_name, table_name, file_format, pattern):
+    return f"""
+    CREATE OR REPLACE PIPE {database}.{schema}.{pipe_name}
+      AUTO_INGEST = TRUE
+      AS
+      COPY INTO {database}.{schema}.{table_name}
+      FROM @{database}.{schema}.{stage_name}
+      PATTERN = '{pattern}'
+      FILE_FORMAT = (FORMAT_NAME = {file_format})
+      MATCH_BY_COLUMN_NAME = CASE_INSENSITIVE
+      ON_ERROR = 'CONTINUE';
+    """.strip()
+
+
 def connect_snowflake(cfg):
     snow_cfg = cfg["snowflake"]
     return snowflake.connector.connect(
@@ -92,10 +106,17 @@ def ensure_stage(cur, database, schema, stage_name, source_prefix, storage_integ
     print(f"✅ Ensured stage: {database}.{schema}.{stage_name}")
 
 
+def ensure_pipe(cur, database, schema, pipe_name, stage_name, table_name, file_format, pattern):
+    sql = build_pipe_sql(database, schema, pipe_name, stage_name, table_name, file_format, pattern)
+    cur.execute(sql)
+    print(f"✅ Ensured pipe: {database}.{schema}.{pipe_name}")
+
+
 def copy_table(cur, database, schema, mapping, dry_run=False):
     table_name = mapping["table"]
     source_prefix = mapping["source_prefix"]
     stage_name = mapping.get("stage_name", f"{table_name.lower()}_stage")
+    pipe_name = mapping.get("pipe_name", f"{table_name.lower()}_pipe")
     file_format = mapping.get("file_format")
     pattern = mapping.get("pattern", ".*\\.parquet$")
     storage_integration = mapping.get("storage_integration")
@@ -105,18 +126,17 @@ def copy_table(cur, database, schema, mapping, dry_run=False):
     if not storage_integration:
         storage_integration = get_copy_defaults()["storage_integration"]
 
-    print(f"\n📦 Processing {table_name} from {source_prefix}")
+    print(f"\n📦 Configuring pipe-based ingestion for {table_name} from {source_prefix}")
 
     if dry_run:
         print(build_stage_sql(database, schema, stage_name, source_prefix, storage_integration, file_format))
-        print(build_copy_sql(database, schema, stage_name, table_name, file_format, pattern))
+        print(build_pipe_sql(database, schema, pipe_name, stage_name, table_name, file_format, pattern))
         return
 
     ensure_file_format(cur, file_format)
     ensure_stage(cur, database, schema, stage_name, source_prefix, storage_integration, file_format)
-    copy_sql = build_copy_sql(database, schema, stage_name, table_name, file_format, pattern)
-    cur.execute(copy_sql)
-    print(f"✅ Loaded data into {database}.{schema}.{table_name}")
+    ensure_pipe(cur, database, schema, pipe_name, stage_name, table_name, file_format, pattern)
+    print(f"✅ Pipe is ready to ingest new landing files into {database}.{schema}.{table_name}")
 
 
 def list_tables(manifest):
@@ -132,7 +152,7 @@ def main():
     parser.add_argument("--table", help="Process one table only (matches manifest key, e.g. contract or customer)")
     parser.add_argument("--list", action="store_true", help="List all tables in the manifest")
     parser.add_argument("--dry-run", action="store_true", help="Print SQL without executing it")
-    parser.add_argument("--create-objects-only", action="store_true", help="Create or replace file format and stage objects without running COPY INTO")
+    parser.add_argument("--create-objects-only", action="store_true", help="Create or replace file format, stage, and pipe objects without executing any manual COPY INTO")
     args = parser.parse_args()
 
     manifest = get_manifest(args.manifest)
@@ -182,6 +202,16 @@ def main():
             if args.create_objects_only:
                 ensure_file_format(cur, table_cfg["file_format"])
                 ensure_stage(cur, database, table_cfg["schema"], table_cfg["stage_name"], table_cfg["source_prefix"], table_cfg["storage_integration"], table_cfg["file_format"])
+                ensure_pipe(
+                    cur,
+                    database,
+                    table_cfg["schema"],
+                    table_cfg.get("pipe_name", f"{table_cfg['table'].lower()}_pipe"),
+                    table_cfg["stage_name"],
+                    table_cfg["table"],
+                    table_cfg["file_format"],
+                    table_cfg.get("pattern", ".*\\.parquet$"),
+                )
                 continue
 
             copy_table(cur, database, table_cfg["schema"], table_cfg, dry_run=False)
