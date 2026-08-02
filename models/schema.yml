@@ -1,0 +1,220 @@
+version: 2
+
+models:
+
+  # ============================================================
+  # CANONICAL – Dimension Tables
+  # ============================================================
+
+  - name: dim_contract
+    description: "Contract dimension (SCD Type 2). Alias: CONTRACT_DIM."
+    config:
+      alias: CONTRACT_DIM
+    columns:
+      - name: SRC_SYS_ID
+        description: "Surrogate key — same as CONTRACT_ID cast to NUMBER"
+        data_type: NUMBER
+      - name: CONTRACT_ID
+        description: "Business contract identifier"
+        data_type: VARCHAR
+      - name: CONTRACT_NUMBER
+        data_type: VARCHAR
+      - name: CONTRACT_NAME
+        data_type: VARCHAR
+      - name: CONTRACT_NAME_NORMALIZED
+        data_type: VARCHAR
+      - name: CUSTOMER_ID
+        data_type: NUMBER
+      - name: CONTRACT_TYPE
+        data_type: VARCHAR
+      - name: START_DATE
+        data_type: DATE
+      - name: END_DATE
+        data_type: DATE
+      - name: CONTRACT_VALUE
+        data_type: NUMBER
+      - name: CONTRACT_STATUS
+        data_type: VARCHAR
+      - name: SALES_REGION
+        data_type: VARCHAR
+      - name: ACCOUNT_MANAGER
+        data_type: VARCHAR
+      - name: SRC_SYS_DATE_CREATED
+        data_type: TIMESTAMP_NTZ
+      - name: SRC_SYS_DATE_UPDATED
+        data_type: TIMESTAMP_NTZ
+      - name: EFFECTIVE_START_DATE
+        data_type: DATE
+      - name: EFFECTIVE_END_DATE
+        data_type: DATE
+      - name: LATEST_FLAG
+        data_type: BOOLEAN
+      - name: DATE_CREATED
+        data_type: TIMESTAMP_NTZ
+      - name: DATE_UPDATED
+        data_type: TIMESTAMP_NTZ
+      - name: SOURCE_SYSTEM
+        data_type: VARCHAR
+
+  - name: dim_customer
+    description: "Customer dimension (SCD Type 2). Alias: CUSTOMER_DIM."
+    config:
+      alias: CUSTOMER_DIM
+    columns:
+      - name: SRC_SYS_ID
+        description: "Surrogate key — same as CUSTOMER_ID cast to NUMBER"
+        data_type: NUMBER
+      - name: CUSTOMER_ID
+        data_type: VARCHAR
+      - name: CUSTOMER_NUMBER
+        data_type: VARCHAR
+      - name: CUSTOMER_NAME
+        data_type: VARCHAR
+      - name: CUSTOMER_NAME_NORMALIZED
+        data_type: VARCHAR
+      - name: CUSTOMER_TYPE
+        data_type: VARCHAR
+      - name: INDUSTRY
+        data_type: VARCHAR
+      - name: ADDRESS
+        data_type: VARCHAR
+      - name: CITY
+        data_type: VARCHAR
+      - name: STATE
+        data_type: VARCHAR
+      - name: COUNTRY
+        data_type: VARCHAR
+      - name: EMAIL
+        data_type: VARCHAR
+      - name: PHONE
+        data_type: VARCHAR
+      - name: SRC_SYS_DATE_CREATED
+        data_type: TIMESTAMP_NTZ
+      - name: SRC_SYS_DATE_UPDATED
+        data_type: TIMESTAMP_NTZ
+      - name: EFFECTIVE_START_DATE
+        data_type: DATE
+      - name: EFFECTIVE_END_DATE
+        data_type: DATE
+      - name: LATEST_FLAG
+        data_type: BOOLEAN
+      - name: DATE_CREATED
+        data_type: TIMESTAMP_NTZ
+      - name: DATE_UPDATED
+        data_type: TIMESTAMP_NTZ
+      - name: SOURCE_SYSTEM
+        data_type: VARCHAR
+
+  - name: dim_product
+    description: "Product dimension (SCD Type 2). Alias: PRODUCT_DIM."
+    config:
+      alias: PRODUCT_DIM
+    columns:
+      - name: SRC_SYS_ID
+        description: "Surrogate key — same as PRODUCT_ID cast to NUMBER"
+        data_type: NUMBER
+      - name: PRODUCT_ID
+        data_type: VARCHAR
+      - name: PRODUCT_CODE
+        data_type: VARCHAR
+      - name: PRODUCT_NAME
+        data_type: VARCHAR
+      - name: PRODUCT_NAME_NORMALIZED
+        data_type: VARCHAR
+      - name: PRODUCT_CATEGORY
+        data_type: VARCHAR
+      - name: PRODUCT_SUBCATEGORY
+        data_type: VARCHAR
+      - name: BRAND
+        data_type: VARCHAR
+      - name: MANUFACTURER
+        data_type: VARCHAR
+      - name: UNIT_PRICE
+        data_type: NUMBER
+      - name: PRODUCT_STATUS
+        data_type: VARCHAR
+      - name: SRC_SYS_DATE_CREATED
+        data_type: TIMESTAMP_NTZ
+      - name: SRC_SYS_DATE_UPDATED
+        data_type: TIMESTAMP_NTZ
+      - name: EFFECTIVE_START_DATE
+        data_type: DATE
+      - name: EFFECTIVE_END_DATE
+        data_type: DATE
+      - name: LATEST_FLAG
+        data_type: BOOLEAN
+      - name: DATE_CREATED
+        data_type: TIMESTAMP_NTZ
+      - name: DATE_UPDATED
+        data_type: TIMESTAMP_NTZ
+      - name: SOURCE_SYSTEM
+        data_type: VARCHAR
+
+  - name: sales_fact
+    description: "Consolidated sales fact table (direct + indirect). Alias: SALES_FACT."
+    columns:
+      - name: SRC_SYS_ID
+        data_type: NUMBER
+      - name: SALE_LINE_ID
+        data_type: VARCHAR
+      - name: CUSTOMER_ID
+        data_type: NUMBER
+      - name: PRODUCT_ID
+        data_type: NUMBER
+      - name: CONTRACT_ID
+        data_type: NUMBER
+      - name: SUBMISSION_ID
+        data_type: NUMBER
+      - name: SALE_TYPE
+        data_type: VARCHAR
+      - name: INV_DATE
+        data_type: DATE
+      - name: INV_QTY
+        data_type: NUMBER
+      - name: INV_AMT
+        data_type: NUMBER
+      - name: DISC_REQUESTED
+        data_type: NUMBER
+      - name: DISC_PAID
+        data_type: NUMBER
+      - name: LINE_SEVERITY
+        data_type: VARCHAR
+      - name: GROSS_SALES
+        data_type: NUMBER
+      - name: NET_AMOUNT
+        data_type: NUMBER
+      - name: DISCOUNT_AMOUNT
+        data_type: NUMBER
+      - name: DISCOUNT_PERCENT
+        data_type: NUMBER
+      - name: LINE_SEVERITY_FLAG
+        data_type: BOOLEAN
+      - name: SRC_SYS_DATE_CREATED
+        data_type: TIMESTAMP_NTZ
+      - name: SRC_SYS_DATE_UPDATED
+        data_type: TIMESTAMP_NTZ
+      - name: ETL_DATE_CREATED
+        data_type: TIMESTAMP_NTZ
+      - name: ETL_DATE_UPDATED
+        data_type: TIMESTAMP_NTZ
+      - name: SOURCE_SYSTEM
+        data_type: VARCHAR
+
+  # ============================================================
+  # CURATED – Aggregate / Reporting Tables
+  # ============================================================
+
+  - name: customer_analytics
+    description: "Customer-level analytics aggregation. Alias: CUSTOMER_ANALYTICS."
+    config:
+      alias: CUSTOMER_ANALYTICS
+
+  - name: product_performance
+    description: "Product-level performance aggregation. Alias: PRODUCT_PERFORMANCE."
+    config:
+      alias: PRODUCT_PERFORMANCE
+
+  - name: sales_summary
+    description: "High-level sales summary. Alias: SALES_SUMMARY."
+    config:
+      alias: SALES_SUMMARY
