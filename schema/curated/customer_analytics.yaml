@@ -1,6 +1,6 @@
 table_name: CUSTOMER_ANALYTICS
 
-schema: SALES_CURATED
+schema: sales_curated
 
 description: Customer level analytical metrics.
 

@@ -9,6 +9,6 @@ sf_e2e:
       role: ACCOUNTADMIN
       database: SALES
       warehouse: compute_wh
-      schema: SALES_RAW
+      schema: sales_raw
       threads: 4
       client_session_keep_alive: true

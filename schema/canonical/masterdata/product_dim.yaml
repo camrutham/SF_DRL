@@ -1,6 +1,6 @@
 table_name: PRODUCT_DIM
 
-schema: SALES_CANONICAL
+schema: sales_canonical
 
 description: Product dimension (SCD Type 2).
 

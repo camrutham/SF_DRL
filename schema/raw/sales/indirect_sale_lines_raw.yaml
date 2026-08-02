@@ -1,6 +1,6 @@
 table_name: INDIRECT_SALE_LINES_RAW
 
-schema: SALES_RAW
+schema: sales_raw
 
 description: Indirect sales transaction raw table.
 

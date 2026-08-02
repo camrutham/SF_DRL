@@ -1,6 +1,6 @@
 table_name: DIRECT_SALE_LINES_RAW
 
-schema: SALES_RAW
+schema: sales_raw
 
 description: Direct sales transaction raw table.
 

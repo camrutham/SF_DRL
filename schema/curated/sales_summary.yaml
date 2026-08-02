@@ -1,6 +1,6 @@
 table_name: SALES_SUMMARY
 
-schema: SALES_CURATED
+schema: sales_curated
 
 description: Aggregated sales summary for business reporting.
 

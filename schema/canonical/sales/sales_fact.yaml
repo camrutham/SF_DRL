@@ -1,6 +1,6 @@
 table_name: SALES_FACT
 
-schema: SALES_CANONICAL
+schema: sales_canonical
 
 description: Consolidated sales fact table combining Direct and Indirect Sales.
 

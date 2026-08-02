@@ -1,6 +1,6 @@
 table_name: CUSTOMER_DIM
 
-schema: SALES_CANONICAL
+schema: sales_canonical
 
 description: Customer dimension (SCD Type 2).
 

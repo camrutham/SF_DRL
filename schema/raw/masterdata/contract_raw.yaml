@@ -1,6 +1,6 @@
 table_name: CONTRACT_RAW
 
-schema: SALES_RAW
+schema: sales_raw
 
 description: Contract master raw table.
 

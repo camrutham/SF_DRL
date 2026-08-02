@@ -1,6 +1,6 @@
 table_name: PRODUCT_PERFORMANCE
 
-schema: SALES_CURATED
+schema: sales_curated
 
 description: Product performance metrics.
 

@@ -3,14 +3,14 @@ version: 2
 sources:
   - name: raw_sales
     database: SALES
-    schema: SALES_RAW
+    schema: sales_raw
     tables:
       - name: DIRECT_SALE_LINES_RAW
       - name: INDIRECT_SALE_LINES_RAW
 
   - name: raw_masterdata
     database: SALES
-    schema: SALES_RAW
+    schema: sales_raw
     tables:
       - name: CUSTOMER_RAW
       - name: PRODUCT_RAW

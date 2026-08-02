@@ -23,7 +23,7 @@ SELECT
     ETL_DATE_CREATED,
     ETL_DATE_UPDATED,
     SOURCE_SYSTEM
-FROM SALES.SALES_RAW_sales_canonical.sales_fact_direct
+FROM SALES.sales_canonical.sales_fact_direct
 
 UNION ALL
 
@@ -50,4 +50,4 @@ SELECT
     ETL_DATE_CREATED,
     ETL_DATE_UPDATED,
     SOURCE_SYSTEM
-FROM SALES.SALES_RAW_sales_canonical.sales_fact_indirect
+FROM SALES.sales_canonical.sales_fact_indirect

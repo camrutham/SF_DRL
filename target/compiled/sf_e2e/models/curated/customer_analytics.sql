@@ -14,8 +14,8 @@ SELECT
     MAX(f.INV_DATE) AS LAST_PURCHASE_DATE,
     SUM(CASE WHEN f.LINE_SEVERITY_FLAG = TRUE THEN 1 ELSE 0 END) AS HIGH_SEVERITY_COUNT,
     CURRENT_TIMESTAMP() AS ETL_DATE_CREATED
-FROM SALES.SALES_RAW_sales_canonical.dim_customer c
-LEFT JOIN SALES.SALES_RAW_sales_canonical.sales_fact f
+FROM SALES.sales_canonical.dim_customer c
+LEFT JOIN SALES.sales_canonical.sales_fact f
     ON c.CUSTOMER_ID = f.CUSTOMER_ID
 GROUP BY
     c.CUSTOMER_ID,

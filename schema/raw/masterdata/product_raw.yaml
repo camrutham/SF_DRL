@@ -1,6 +1,6 @@
 table_name: PRODUCT_RAW
 
-schema: SALES_RAW
+schema: sales_raw
 
 description: Product master raw table.
 

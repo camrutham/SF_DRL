@@ -6,7 +6,7 @@
     "contract": {
       "source_prefix": "s3://drl-landing/mysql/drl_dev/contract/",
       "table": "CONTRACT_RAW",
-      "schema": "SALES_RAW",
+      "schema": "sales_raw",
       "stage_name": "CONTRACT_STAGE",
       "pattern": ".*\\.parquet$",
       "file_format": "parquet_format"
@@ -14,7 +14,7 @@
     "customer": {
       "source_prefix": "s3://drl-landing/mysql/drl_dev/customer/",
       "table": "CUSTOMER_RAW",
-      "schema": "SALES_RAW",
+      "schema": "sales_raw",
       "stage_name": "CUSTOMER_STAGE",
       "pattern": ".*\\.parquet$",
       "file_format": "parquet_format"
@@ -22,7 +22,7 @@
     "product": {
       "source_prefix": "s3://drl-landing/mysql/drl_dev/product/",
       "table": "PRODUCT_RAW",
-      "schema": "SALES_RAW",
+      "schema": "sales_raw",
       "stage_name": "PRODUCT_STAGE",
       "pattern": ".*\\.parquet$",
       "file_format": "parquet_format"
@@ -30,7 +30,7 @@
     "dir_sale_lines": {
       "source_prefix": "s3://drl-landing/mysql/drl_dev/direct_sale_lines/",
       "table": "DIRECT_SALE_LINES_RAW",
-      "schema": "SALES_RAW",
+      "schema": "sales_raw",
       "stage_name": "DIRECT_SALES_STAGE",
       "pipe_name": "DIRECT_SALE_LINES_RAW_PIPE",
       "pattern": ".*\\.parquet$",
@@ -39,7 +39,7 @@
     "indir_sale_lines": {
       "source_prefix": "s3://drl-landing/mysql/drl_dev/indirect_sale_lines/",
       "table": "INDIRECT_SALE_LINES_RAW",
-      "schema": "SALES_RAW",
+      "schema": "sales_raw",
       "stage_name": "INDIRECT_SALES_STAGE",
       "pipe_name": "INDIRECT_SALE_LINES_RAW_PIPE",
       "pattern": ".*\\.parquet$",

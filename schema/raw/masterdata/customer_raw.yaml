@@ -1,6 +1,6 @@
 table_name: CUSTOMER_RAW
 
-schema: SALES_RAW
+schema: sales_raw
 
 description: Customer master raw table.
 

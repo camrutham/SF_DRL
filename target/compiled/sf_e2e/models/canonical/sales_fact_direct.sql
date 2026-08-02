@@ -25,7 +25,7 @@ WITH source_data AS (
         s.ETL_DATE_UPDATED,
         s.SOURCE_SYSTEM,
         s.DATE_UPDATED
-    FROM SALES.SALES_RAW_sales_raw.stg_direct_sales s
+    FROM SALES.sales_raw.stg_direct_sales s
 )
 
 SELECT
@@ -53,6 +53,3 @@ SELECT
     SOURCE_SYSTEM
 FROM source_data
 
-
-WHERE DATE_UPDATED > (SELECT MAX(COALESCE(SRC_SYS_DATE_UPDATED, DATE_UPDATED)) FROM SALES.SALES_RAW_sales_canonical.sales_fact_direct)
-   OR SRC_SYS_DATE_UPDATED > (SELECT MAX(COALESCE(SRC_SYS_DATE_UPDATED, DATE_UPDATED)) FROM SALES.SALES_RAW_sales_canonical.sales_fact_direct)
