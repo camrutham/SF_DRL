@@ -1,8 +1,0 @@
-{
-  "_comment": "Ingestion is driven by copy_data_manifest.json and Snowflake Native features (Staging Views, Stored Procedures, and Tasks) orchestrated in ingest_data.py and copy_and_load.py. dbt has been completely replaced with Snowflake Native capabilities.",
-  "layers": {
-    "raw": "sales_raw",
-    "canonical": "sales_canonical",
-    "curated": "sales_curated"
-  }
-}

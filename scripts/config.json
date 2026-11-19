@@ -38,11 +38,6 @@
     }
   },
   "sql": {
-    "markers": {
-      "setup": "-- Step 1: File Format Definition",
-      "full_load": "-- FULL LOAD SECTION",
-      "incremental_load": "-- INCREMENTAL LOAD SECTION"
-    },
     "schema_layer_map": {
       "raw": "schema_raw",
       "canonical": "schema_canonical",

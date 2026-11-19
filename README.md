@@ -119,6 +119,7 @@ SF_DRL/
 │   ├── copy_and_load.py                # Unified Copy Load + Native Transformation Pipeline
 │   ├── ingest_data.py                  # Pipeline runner (raw -> canonical -> curated)
 │   ├── copy_data.py                    # Stage & Raw copy load logic
+│   ├── ddl_generator.py                # YAML to DDL SQL generator
 │   ├── snowflake_utils.py              # Snowflake connector & query helpers
 │   ├── config.json                     # Unified configuration
 │   └── copy_data_manifest.json         # S3 landing to raw table mappings

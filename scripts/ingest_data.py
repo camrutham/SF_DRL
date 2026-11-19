@@ -151,9 +151,9 @@ def main() -> int:
     )
     parser.add_argument(
         "--stage",
-        choices=["all", "raw", "canonical", "curated", "transforms", "dbt"],
+        choices=["all", "raw", "canonical", "curated", "transforms"],
         default="all",
-        help="Which stage(s) to run (default: all). Note: 'dbt' is retained as an alias for native transforms.",
+        help="Which stage(s) to run: 'raw', 'canonical', 'curated', 'transforms' (both), or 'all' (default).",
     )
     parser.add_argument(
         "--full-refresh",
@@ -177,10 +177,6 @@ def main() -> int:
     args = parser.parse_args()
 
     selected_stage = args.stage
-    if selected_stage == "dbt":
-        print("ℹ️ Note: dbt has been retired in favor of Snowflake Native Transformations. Executing native transforms...")
-        selected_stage = "transforms"
-
     log_file = setup_logging("pipeline")
     start = datetime.now()
     logging.info("🚀 Ingestion pipeline starting (Snowflake Native)...")

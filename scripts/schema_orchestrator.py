@@ -4,18 +4,18 @@ schema_orchestrator.py
 ======================
 Orchestrates complete Snowflake database, schema, and native pipeline infrastructure:
 
-  1. Create Database & Schemas (from create_schema.py)
+  1. Create Database & Schemas
      - Creates database (e.g., sales) and schemas (sales_raw, sales_canonical, sales_curated).
 
-  2. Setup External Stage Objects (from setup_external_objects.py)
+  2. Setup External Stage Objects
      - Creates File Formats, Storage Integrations, and Stages driven by CSV templates
        (templates/file_formats.csv, templates/storage_integrations.csv, templates/stages.csv).
 
-  3. Create Target Tables (from create_tables.py)
+  3. Create Target Tables
      - Parses table definition YAML files under the schema/ directory tree (raw, canonical, curated)
        and executes CREATE TABLE IF NOT EXISTS.
 
-  4. Setup Native Transformation Objects (replaces dbt)
+  4. Setup Native Transformation Objects
      - Deploys Snowflake Native Staging Views, Stored Procedures, CDC Streams, and Task DAG.
 
 Usage
@@ -28,7 +28,6 @@ Usage
 
 import argparse
 import csv
-import logging
 import sys
 from pathlib import Path
 from typing import Dict

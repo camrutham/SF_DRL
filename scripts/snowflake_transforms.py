@@ -214,9 +214,9 @@ def main() -> int:
     )
     parser.add_argument(
         "--stage",
-        choices=["all", "canonical", "curated", "transforms", "dbt"],
+        choices=["all", "canonical", "curated", "transforms"],
         default="all",
-        help="Which transformation stage to run (default: all). Note: 'dbt' is an alias for backwards compatibility.",
+        help="Which transformation stage to run: 'canonical', 'curated', 'transforms' (both), or 'all' (default).",
     )
     parser.add_argument(
         "--full-refresh",

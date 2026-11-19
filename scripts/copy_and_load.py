@@ -48,7 +48,7 @@ LOG_DIR = PROJECT_ROOT / "logs"
 DEFAULT_CONFIG = SCRIPT_DIR / "config.json"
 COPY_MANIFEST_PATH = SCRIPT_DIR / "copy_data_manifest.json"
 
-from snowflake_transforms import run_canonical, run_curated, run_full_pipeline, deploy_all
+from snowflake_transforms import run_canonical, run_curated, run_full_pipeline
 
 
 # ==========================================================
@@ -227,7 +227,7 @@ def main() -> int:
     )
     parser.add_argument(
         "--stage",
-        choices=["all", "raw", "canonical", "curated", "transforms", "dbt"],
+        choices=["all", "raw", "canonical", "curated", "transforms"],
         default="all",
         help="Which stage(s) to run: 'raw' (COPY INTO), 'canonical', 'curated', 'transforms' (both canonical and curated), 'all' (default)",
     )
