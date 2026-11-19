@@ -78,7 +78,6 @@ The project maintains an exact 1:1 alignment between table DDL schemas and trans
 | **Curated** | *(root)* | `schema/curated/customer_analytics.yaml` | `transform/curated/customer_analytics.sql` | `sales_curated.CUSTOMER_ANALYTICS` |
 | | *(root)* | `schema/curated/product_performance.yaml` | `transform/curated/product_performance.sql` | `sales_curated.PRODUCT_PERFORMANCE` |
 | | *(root)* | `schema/curated/sales_summary.yaml` | `transform/curated/sales_summary.sql` | `sales_curated.SALES_SUMMARY` |
-| **Orchestration** | *(root)* | N/A | `transform/orchestration/dynamic_tables.sql` | Declarative Dynamic Tables alternative |
 
 ---
 
@@ -105,12 +104,10 @@ SF_DRL/
 │   ├── canonical/                      # Canonical layer transformations
 │   │   ├── masterdata/                 # contract_dim.sql, customer_dim.sql, product_dim.sql
 │   │   └── sales/                      # sales_fact.sql, sales_fact_direct.sql, sales_fact_indirect.sql
-│   ├── curated/                        # Curated layer aggregations
-│   │   ├── customer_analytics.sql
-│   │   ├── product_performance.sql
-│   │   └── sales_summary.sql
-│   └── orchestration/                  # Declarative dynamic tables option
-│       └── dynamic_tables.sql          # Declarative Dynamic Tables alternative
+│   └── curated/                        # Curated layer aggregations
+│       ├── customer_analytics.sql
+│       ├── product_performance.sql
+│       └── sales_summary.sql
 ├── scripts/
 │   ├── schema_orchestrator.py          # Complete environment orchestrator
 │   ├── snowflake_transforms.py         # Direct Native Transformation Engine & View Deployer
