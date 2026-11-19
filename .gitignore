@@ -1,2 +1,15 @@
-scripts/__pycache__/copy_data.cpython-313.pyc
-scripts/__pycache__/snowflake_utils.cpython-313.pyc
+# Python bytecode
+__pycache__/
+*.py[cod]
+*$py.class
+scripts/__pycache__/
+
+# Logs and environment
+logs/
+.env
+.venv/
+env/
+venv/
+
+# Snowflake temporary files
+.snowflake/

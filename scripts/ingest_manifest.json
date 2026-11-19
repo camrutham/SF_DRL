@@ -1,10 +1,8 @@
 {
-  "_comment": "This manifest is no longer used by ingest_data.py. Raw COPY operations are driven by copy_data_manifest.json. dbt model selectors are configured directly in ingest_data.py.",
-  "_deprecated_sql_paths": {
-    "sales": "transform/raw/sales",
-    "customer": "transform/raw/masterdata",
-    "product": "transform/raw/masterdata",
-    "product_category": "transform/raw/masterdata",
-    "product_dim": "transform/canonical/masterdata"
+  "_comment": "Ingestion is driven by copy_data_manifest.json and Snowflake Native features (Staging Views, Stored Procedures, and Tasks) orchestrated in ingest_data.py and copy_and_load.py. dbt has been completely replaced with Snowflake Native capabilities.",
+  "layers": {
+    "raw": "sales_raw",
+    "canonical": "sales_canonical",
+    "curated": "sales_curated"
   }
 }

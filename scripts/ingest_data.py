@@ -2,23 +2,29 @@
 """
 ingest_data.py
 ==============
-End-to-end data ingestion pipeline:
+End-to-end data ingestion and Snowflake Native transformation pipeline:
 
-  Stage 1 – Raw Load    : COPY INTO raw tables from S3 stages  (via copy_data.py)
-  Stage 2 – Canonical   : dbt run  staging + canonical models  (raw  → canonical)
-  Stage 3 – Curated     : dbt run  curated models              (canonical → curated)
+  Stage 1 – Raw Load    : COPY INTO raw tables from S3 stages (via copy_data.py)
+  Stage 2 – Canonical   : Snowflake Native SCD2 & Fact transformations (raw → canonical)
+  Stage 3 – Curated     : Snowflake Native Analytical Aggregations (canonical → curated)
+
+Features:
+  - Incremental Load (default): Loads delta changes based on watermark timestamps.
+  - Full Refresh (--full-refresh): Truncates and rebuilds canonical and curated tables.
 
 Usage
 -----
-  python scripts/ingest_data.py                  # run all three stages
-  python scripts/ingest_data.py --stage raw      # raw load only
-  python scripts/ingest_data.py --stage dbt      # dbt transforms only
-  python scripts/ingest_data.py --table contract # raw-load a single table
-  python scripts/ingest_data.py --dry-run        # print SQL without executing
+  python scripts/ingest_data.py                  # Run all three stages (incremental)
+  python scripts/ingest_data.py --full-refresh   # Run all three stages (full refresh)
+  python scripts/ingest_data.py --stage raw      # Raw load only
+  python scripts/ingest_data.py --stage transforms # Snowflake native transforms only
+  python scripts/ingest_data.py --stage canonical# Canonical stage only
+  python scripts/ingest_data.py --stage curated  # Curated stage only
+  python scripts/ingest_data.py --table contract # Raw-load a single table
+  python scripts/ingest_data.py --dry-run        # Print commands/SQL without executing
 """
 
 import argparse
-import json
 import logging
 import subprocess
 import sys
@@ -28,10 +34,14 @@ from pathlib import Path
 # ==========================================================
 # Paths
 # ==========================================================
-SCRIPT_DIR   = Path(__file__).resolve().parent
+SCRIPT_DIR = Path(__file__).resolve().parent
 PROJECT_ROOT = SCRIPT_DIR.parent
-LOG_DIR      = PROJECT_ROOT / "logs"
-CONFIG_PATH  = SCRIPT_DIR / "config.json"
+LOG_DIR = PROJECT_ROOT / "logs"
+CONFIG_PATH = SCRIPT_DIR / "config.json"
+
+from snowflake_utils import connect_snowflake, get_config
+from snowflake_transforms import run_canonical, run_curated, run_full_pipeline
+
 
 # ==========================================================
 # Logging
@@ -88,61 +98,39 @@ def run_raw_load(table: str | None = None, dry_run: bool = False) -> None:
 
 
 # ==========================================================
-# Stage 2 & 3 – dbt transforms
+# Stage 2 & 3 – Snowflake Native Transformations
 # ==========================================================
+def run_native_transforms(stage: str = "all", full_refresh: bool = False, dry_run: bool = False) -> None:
+    """Execute Snowflake Native transformations via Stored Procedures."""
+    cfg = get_config()
+    snow_cfg = cfg["snowflake"]
 
-# dbt model selectors for each layer
-DBT_CANONICAL_SELECTORS = [
-    "staging.stg_direct_sales",
-    "staging.stg_indirect_sales",
-    "canonical.dim_customer",
-    "canonical.dim_product",
-    "canonical.dim_contract",
-    "canonical.sales_fact_direct",
-    "canonical.sales_fact_indirect",
-    "canonical.sales_fact",
-]
+    if dry_run:
+        logging.info(f"[DRY-RUN] Would execute Snowflake Native transforms for stage: {stage} (full_refresh={full_refresh})")
+        if stage in ("all", "canonical"):
+            run_canonical(None, cfg, full_refresh=full_refresh, dry_run=True)
+        if stage in ("all", "curated"):
+            run_curated(None, cfg, full_refresh=full_refresh, dry_run=True)
+        return
 
-DBT_CURATED_SELECTORS = [
-    "curated.customer_analytics",
-    "curated.product_performance",
-    "curated.sales_summary",
-]
+    conn = connect_snowflake()
+    cur = conn.cursor()
+    try:
+        cur.execute(f"USE ROLE {snow_cfg['role']}")
+        cur.execute(f"USE DATABASE {snow_cfg['database']}")
+        cur.execute(f"USE WAREHOUSE {snow_cfg['warehouse']}")
 
+        if stage == "all":
+            run_full_pipeline(cur, cfg, full_refresh=full_refresh, dry_run=False)
+        elif stage == "canonical":
+            run_canonical(cur, cfg, full_refresh=full_refresh, dry_run=False)
+        elif stage == "curated":
+            run_curated(cur, cfg, full_refresh=full_refresh, dry_run=False)
 
-def run_dbt(selectors: list[str], label: str) -> None:
-    """
-    Execute `dbt run --select <selectors>` from the project root.
-    profiles.yml and dbt_project.yml are both in PROJECT_ROOT.
-    """
-    cmd = [
-        "dbt", "run",
-        "--profiles-dir", str(PROJECT_ROOT),
-        "--project-dir",  str(PROJECT_ROOT),
-        "--select",
-    ] + selectors
-
-    logging.info(f"🔄 {label} – dbt run starting...")
-    logging.info(f"   Models : {', '.join(selectors)}")
-    logging.info(f"   Command: {' '.join(cmd)}")
-
-    result = subprocess.run(cmd, cwd=str(PROJECT_ROOT))
-    if result.returncode != 0:
-        raise RuntimeError(
-            f"dbt run exited with code {result.returncode} for {label}. "
-            "Check the dbt output above for details."
-        )
-    logging.info(f"✅ {label} – dbt run complete.")
-
-
-def run_canonical_transform() -> None:
-    """Stage 2 – raw → canonical using staging + canonical dbt models."""
-    run_dbt(DBT_CANONICAL_SELECTORS, "Stage 2 – raw → canonical")
-
-
-def run_curated_transform() -> None:
-    """Stage 3 – canonical → curated using curated dbt models."""
-    run_dbt(DBT_CURATED_SELECTORS, "Stage 3 – canonical → curated")
+        conn.commit()
+    finally:
+        cur.close()
+        conn.close()
 
 
 # ==========================================================
@@ -151,19 +139,26 @@ def run_curated_transform() -> None:
 def main() -> int:
     parser = argparse.ArgumentParser(
         description=(
-            "End-to-end ingestion: raw load (copy_data.py) + dbt transforms.\n\n"
+            "End-to-end ingestion: raw load (copy_data.py) + Snowflake Native transforms.\n\n"
             "Stages:\n"
-            "  raw  – COPY parquet from S3 stages into Snowflake raw tables\n"
-            "  dbt  – Run dbt models: staging → canonical → curated\n"
-            "  all  – Run both stages (default)\n"
+            "  raw         – COPY parquet from S3 stages into Snowflake raw tables\n"
+            "  canonical   – Transform raw tables into Canonical SCD2 Dims & Sales Fact\n"
+            "  curated     – Aggregate Canonical models into Curated business tables\n"
+            "  transforms  – Run both canonical and curated stages\n"
+            "  all         – Run full pipeline (raw + canonical + curated, default)\n"
         ),
         formatter_class=argparse.RawDescriptionHelpFormatter,
     )
     parser.add_argument(
         "--stage",
-        choices=["all", "raw", "dbt"],
+        choices=["all", "raw", "canonical", "curated", "transforms", "dbt"],
         default="all",
-        help="Which stage(s) to run (default: all)",
+        help="Which stage(s) to run (default: all). Note: 'dbt' is retained as an alias for native transforms.",
+    )
+    parser.add_argument(
+        "--full-refresh",
+        action="store_true",
+        help="Perform full refresh (truncate target tables and reload from scratch)",
     )
     parser.add_argument(
         "--table",
@@ -177,28 +172,35 @@ def main() -> int:
     parser.add_argument(
         "--dry-run",
         action="store_true",
-        help="For raw stage: print COPY SQL without executing it.",
+        help="Print SQL and procedure calls without executing them.",
     )
     args = parser.parse_args()
 
+    selected_stage = args.stage
+    if selected_stage == "dbt":
+        print("ℹ️ Note: dbt has been retired in favor of Snowflake Native Transformations. Executing native transforms...")
+        selected_stage = "transforms"
+
     log_file = setup_logging("pipeline")
     start = datetime.now()
-    logging.info("🚀 Ingestion pipeline starting...")
-    logging.info(f"   Stage   : {args.stage}")
+    logging.info("🚀 Ingestion pipeline starting (Snowflake Native)...")
+    logging.info(f"   Stage        : {selected_stage}")
+    logging.info(f"   Full Refresh : {args.full_refresh}")
     if args.table:
-        logging.info(f"   Table   : {args.table}")
+        logging.info(f"   Table        : {args.table}")
     if args.dry_run:
-        logging.info("   Mode    : dry-run")
+        logging.info("   Mode         : dry-run")
 
     success = True
     try:
-        if args.stage in ("all", "raw"):
+        # Stage 1: Raw Load
+        if selected_stage in ("all", "raw"):
             run_raw_load(table=args.table, dry_run=args.dry_run)
 
-        # Skip dbt when dry-run (nothing to transform yet) or table-specific run
-        if args.stage in ("all", "dbt") and not args.dry_run:
-            run_canonical_transform()
-            run_curated_transform()
+        # Stage 2 & 3: Snowflake Native Transforms
+        if selected_stage in ("all", "transforms", "canonical", "curated"):
+            transform_scope = "all" if selected_stage in ("all", "transforms") else selected_stage
+            run_native_transforms(stage=transform_scope, full_refresh=args.full_refresh, dry_run=args.dry_run)
 
     except Exception as exc:
         logging.error(f"❌ Pipeline failed: {exc}", exc_info=True)

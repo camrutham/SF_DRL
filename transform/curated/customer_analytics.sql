@@ -1,0 +1,63 @@
+-- =====================================================================
+-- transform/curated/customer_analytics.sql
+-- Customer Analytics Aggregation Transformation (Pure DML)
+-- Target Table: {DATABASE}.{SCHEMA_CURATED}.CUSTOMER_ANALYTICS
+-- Source Tables: {DATABASE}.{SCHEMA_CANONICAL}.CUSTOMER_DIM, SALES_FACT
+--
+-- Load Behavior:
+--   - Full & Incremental Upsert: Aggregates current customer dimensions
+--     and sales fact lines, updating existing metrics and inserting new.
+-- =====================================================================
+
+MERGE INTO {DATABASE}.{SCHEMA_CURATED}.CUSTOMER_ANALYTICS tgt
+USING (
+    SELECT
+        c.CUSTOMER_ID,
+        c.CUSTOMER_NAME,
+        c.CUSTOMER_TYPE,
+        COUNT(DISTINCT f.SALE_LINE_ID) AS TOTAL_ORDERS,
+        SUM(f.INV_QTY) AS TOTAL_QTY,
+        SUM(f.GROSS_SALES) AS TOTAL_GROSS_SALES,
+        SUM(f.NET_AMOUNT) AS TOTAL_NET_AMOUNT,
+        SUM(f.DISCOUNT_AMOUNT) AS TOTAL_DISCOUNT,
+        AVG(f.DISCOUNT_PERCENT) AS AVG_DISCOUNT_PERCENT,
+        MIN(f.INV_DATE) AS FIRST_PURCHASE_DATE,
+        MAX(f.INV_DATE) AS LAST_PURCHASE_DATE,
+        SUM(CASE WHEN f.LINE_SEVERITY_FLAG = TRUE THEN 1 ELSE 0 END) AS HIGH_SEVERITY_COUNT,
+        CURRENT_TIMESTAMP() AS ETL_DATE_CREATED
+    FROM {DATABASE}.{SCHEMA_CANONICAL}.CUSTOMER_DIM c
+    LEFT JOIN {DATABASE}.{SCHEMA_CANONICAL}.SALES_FACT f
+        ON c.CUSTOMER_ID = f.CUSTOMER_ID
+    GROUP BY
+        c.CUSTOMER_ID,
+        c.CUSTOMER_NAME,
+        c.CUSTOMER_TYPE
+) src
+ON tgt.CUSTOMER_ID = src.CUSTOMER_ID
+WHEN MATCHED THEN
+    UPDATE SET
+        tgt.CUSTOMER_NAME        = src.CUSTOMER_NAME,
+        tgt.CUSTOMER_TYPE        = src.CUSTOMER_TYPE,
+        tgt.TOTAL_ORDERS         = src.TOTAL_ORDERS,
+        tgt.TOTAL_QTY            = src.TOTAL_QTY,
+        tgt.TOTAL_GROSS_SALES    = src.TOTAL_GROSS_SALES,
+        tgt.TOTAL_NET_AMOUNT     = src.TOTAL_NET_AMOUNT,
+        tgt.TOTAL_DISCOUNT       = src.TOTAL_DISCOUNT,
+        tgt.AVG_DISCOUNT_PERCENT = src.AVG_DISCOUNT_PERCENT,
+        tgt.FIRST_PURCHASE_DATE  = src.FIRST_PURCHASE_DATE,
+        tgt.LAST_PURCHASE_DATE   = src.LAST_PURCHASE_DATE,
+        tgt.HIGH_SEVERITY_COUNT  = src.HIGH_SEVERITY_COUNT,
+        tgt.ETL_DATE_CREATED     = CURRENT_TIMESTAMP()
+WHEN NOT MATCHED THEN
+    INSERT (
+        CUSTOMER_ID, CUSTOMER_NAME, CUSTOMER_TYPE, TOTAL_ORDERS,
+        TOTAL_QTY, TOTAL_GROSS_SALES, TOTAL_NET_AMOUNT, TOTAL_DISCOUNT,
+        AVG_DISCOUNT_PERCENT, FIRST_PURCHASE_DATE, LAST_PURCHASE_DATE,
+        HIGH_SEVERITY_COUNT, ETL_DATE_CREATED
+    )
+    VALUES (
+        src.CUSTOMER_ID, src.CUSTOMER_NAME, src.CUSTOMER_TYPE, src.TOTAL_ORDERS,
+        src.TOTAL_QTY, src.TOTAL_GROSS_SALES, src.TOTAL_NET_AMOUNT, src.TOTAL_DISCOUNT,
+        src.AVG_DISCOUNT_PERCENT, src.FIRST_PURCHASE_DATE, src.LAST_PURCHASE_DATE,
+        src.HIGH_SEVERITY_COUNT, src.ETL_DATE_CREATED
+    );

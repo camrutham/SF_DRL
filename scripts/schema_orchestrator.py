@@ -2,7 +2,7 @@
 """
 schema_orchestrator.py
 ======================
-Orchestrates complete Snowflake database and schema infrastructure setup:
+Orchestrates complete Snowflake database, schema, and native pipeline infrastructure:
 
   1. Create Database & Schemas (from create_schema.py)
      - Creates database (e.g., sales) and schemas (sales_raw, sales_canonical, sales_curated).
@@ -15,10 +15,15 @@ Orchestrates complete Snowflake database and schema infrastructure setup:
      - Parses table definition YAML files under the schema/ directory tree (raw, canonical, curated)
        and executes CREATE TABLE IF NOT EXISTS.
 
+  4. Setup Native Transformation Objects (replaces dbt)
+     - Deploys Snowflake Native Staging Views, Stored Procedures, CDC Streams, and Task DAG.
+
 Usage
 -----
   python scripts/schema_orchestrator.py
   python scripts/schema_orchestrator.py --dry-run
+  python scripts/schema_orchestrator.py --transforms-only
+  python scripts/schema_orchestrator.py --skip-transforms
 """
 
 import argparse
@@ -36,6 +41,7 @@ if hasattr(sys.stderr, 'reconfigure'):
 
 from ddl_generator import load_yaml_tables, render_create_table_sql
 from snowflake_utils import connect_snowflake, get_config, execute_sql
+from snowflake_transforms import deploy_all
 
 SCRIPT_DIR = Path(__file__).resolve().parent
 PROJECT_ROOT = SCRIPT_DIR.parent
@@ -217,7 +223,6 @@ def create_tables(cur, snowflake_cfg: dict, schema_dir: Path, dry_run: bool = Fa
             print(f"⚠️ Skipping {yaml_path.name}: missing 'table_name' or 'columns'")
             continue
 
-        # Identify layer from folder path
         parts = yaml_path.parts
         if "schema" not in parts:
             print(f"⚠️ Unexpected folder structure for {yaml_path}")
@@ -242,25 +247,39 @@ def create_tables(cur, snowflake_cfg: dict, schema_dir: Path, dry_run: bool = Fa
 
 
 # ==========================================================
+# 4. Setup Native Transformation Objects (replaces dbt)
+# ==========================================================
+def setup_transforms(cur, cfg: dict, dry_run: bool = False):
+    """Deploy Staging Views, Stored Procedures, CDC Streams, and Tasks."""
+    print("\n--- 4. Setting up Snowflake Native Transformation Objects (replacing dbt) ---")
+    deploy_all(cur, cfg, dry_run=dry_run)
+
+
+# ==========================================================
 # Main Orchestrator Execution
 # ==========================================================
 def main():
     parser = argparse.ArgumentParser(
-        description="Orchestrate Snowflake database, schema, external objects, and table creation."
+        description="Orchestrate Snowflake database, schema, external objects, tables, and native transformation pipeline."
     )
     parser.add_argument("--dry-run", action="store_true", help="Print generated SQL without executing")
+    parser.add_argument("--transforms-only", action="store_true", help="Deploy transformation objects only (Views, Procs, Tasks)")
+    parser.add_argument("--skip-transforms", action="store_true", help="Skip deployment of transformation objects")
     args = parser.parse_args()
 
     cfg = get_config()
     snowflake_cfg = cfg["snowflake"]
     db_name = snowflake_cfg["database"]
 
-    print("🚀 Starting Schema Orchestration...")
+    print("🚀 Starting Schema & Native Pipeline Orchestration...")
 
     if args.dry_run:
-        create_schemas(None, snowflake_cfg, dry_run=True)
-        setup_external_objects(None, snowflake_cfg, TEMPLATES_DIR, dry_run=True)
-        create_tables(None, snowflake_cfg, SCHEMA_DIR, dry_run=True)
+        if not args.transforms_only:
+            create_schemas(None, snowflake_cfg, dry_run=True)
+            setup_external_objects(None, snowflake_cfg, TEMPLATES_DIR, dry_run=True)
+            create_tables(None, snowflake_cfg, SCHEMA_DIR, dry_run=True)
+        if not args.skip_transforms:
+            setup_transforms(None, cfg, dry_run=True)
         print("\n🏁 Dry-run completed successfully.")
         return 0
 
@@ -268,22 +287,27 @@ def main():
     cur = conn.cursor()
 
     try:
-        # Step 1: Create Database & Schemas
-        create_schemas(cur, snowflake_cfg)
+        if not args.transforms_only:
+            # Step 1: Create Database & Schemas
+            create_schemas(cur, snowflake_cfg)
 
-        # Context switch to role, db, schema
-        cur.execute(f"USE ROLE {snowflake_cfg['role']}")
-        cur.execute(f"USE DATABASE {db_name}")
-        cur.execute(f"USE SCHEMA {snowflake_cfg['schema_raw']}")
+            # Context switch to role, db, schema
+            cur.execute(f"USE ROLE {snowflake_cfg['role']}")
+            cur.execute(f"USE DATABASE {db_name}")
+            cur.execute(f"USE SCHEMA {snowflake_cfg['schema_raw']}")
 
-        # Step 2: External Stage Objects
-        setup_external_objects(cur, snowflake_cfg, TEMPLATES_DIR)
+            # Step 2: External Stage Objects
+            setup_external_objects(cur, snowflake_cfg, TEMPLATES_DIR)
 
-        # Step 3: Tables
-        create_tables(cur, snowflake_cfg, SCHEMA_DIR)
+            # Step 3: Tables
+            create_tables(cur, snowflake_cfg, SCHEMA_DIR)
+
+        # Step 4: Snowflake Native Transformation Objects
+        if not args.skip_transforms:
+            setup_transforms(cur, cfg)
 
         conn.commit()
-        print("\n🏁 All schemas, external objects, and tables orchestrated successfully.")
+        print("\n🏁 All schemas, external objects, tables, and native transformations orchestrated successfully.")
     except Exception as exc:
         print(f"\n❌ Schema orchestration failed: {exc}", file=sys.stderr)
         sys.exit(1)

@@ -1,0 +1,62 @@
+-- =====================================================================
+-- transform/curated/product_performance.sql
+-- Product Performance Aggregation Transformation (Pure DML)
+-- Target Table: {DATABASE}.{SCHEMA_CURATED}.PRODUCT_PERFORMANCE
+-- Source Tables: {DATABASE}.{SCHEMA_CANONICAL}.PRODUCT_DIM, SALES_FACT
+--
+-- Load Behavior:
+--   - Full & Incremental Upsert: Aggregates current product dimensions
+--     and sales fact lines, updating existing metrics and inserting new.
+-- =====================================================================
+
+MERGE INTO {DATABASE}.{SCHEMA_CURATED}.PRODUCT_PERFORMANCE tgt
+USING (
+    SELECT
+        p.PRODUCT_ID,
+        p.PRODUCT_NAME,
+        p.PRODUCT_CATEGORY,
+        p.BRAND,
+        SUM(f.INV_QTY) AS TOTAL_QTY,
+        SUM(f.GROSS_SALES) AS TOTAL_GROSS_SALES,
+        SUM(f.NET_AMOUNT) AS TOTAL_NET_AMOUNT,
+        SUM(f.DISCOUNT_AMOUNT) AS TOTAL_DISCOUNT,
+        AVG(f.DISCOUNT_PERCENT) AS AVG_DISCOUNT_PERCENT,
+        COUNT(DISTINCT f.SALE_LINE_ID) AS TOTAL_TRANSACTIONS,
+        SUM(CASE WHEN f.LINE_SEVERITY_FLAG = TRUE THEN 1 ELSE 0 END) AS HIGH_SEVERITY_COUNT,
+        CURRENT_TIMESTAMP() AS ETL_DATE_CREATED
+    FROM {DATABASE}.{SCHEMA_CANONICAL}.PRODUCT_DIM p
+    LEFT JOIN {DATABASE}.{SCHEMA_CANONICAL}.SALES_FACT f
+        ON p.PRODUCT_ID = f.PRODUCT_ID
+    GROUP BY
+        p.PRODUCT_ID,
+        p.PRODUCT_NAME,
+        p.PRODUCT_CATEGORY,
+        p.BRAND
+) src
+ON tgt.PRODUCT_ID = src.PRODUCT_ID
+WHEN MATCHED THEN
+    UPDATE SET
+        tgt.PRODUCT_NAME         = src.PRODUCT_NAME,
+        tgt.PRODUCT_CATEGORY     = src.PRODUCT_CATEGORY,
+        tgt.BRAND                = src.BRAND,
+        tgt.TOTAL_QTY            = src.TOTAL_QTY,
+        tgt.TOTAL_GROSS_SALES    = src.TOTAL_GROSS_SALES,
+        tgt.TOTAL_NET_AMOUNT     = src.TOTAL_NET_AMOUNT,
+        tgt.TOTAL_DISCOUNT       = src.TOTAL_DISCOUNT,
+        tgt.AVG_DISCOUNT_PERCENT = src.AVG_DISCOUNT_PERCENT,
+        tgt.TOTAL_TRANSACTIONS   = src.TOTAL_TRANSACTIONS,
+        tgt.HIGH_SEVERITY_COUNT  = src.HIGH_SEVERITY_COUNT,
+        tgt.ETL_DATE_CREATED     = CURRENT_TIMESTAMP()
+WHEN NOT MATCHED THEN
+    INSERT (
+        PRODUCT_ID, PRODUCT_NAME, PRODUCT_CATEGORY, BRAND,
+        TOTAL_QTY, TOTAL_GROSS_SALES, TOTAL_NET_AMOUNT, TOTAL_DISCOUNT,
+        AVG_DISCOUNT_PERCENT, TOTAL_TRANSACTIONS, HIGH_SEVERITY_COUNT,
+        ETL_DATE_CREATED
+    )
+    VALUES (
+        src.PRODUCT_ID, src.PRODUCT_NAME, src.PRODUCT_CATEGORY, src.BRAND,
+        src.TOTAL_QTY, src.TOTAL_GROSS_SALES, src.TOTAL_NET_AMOUNT, src.TOTAL_DISCOUNT,
+        src.AVG_DISCOUNT_PERCENT, src.TOTAL_TRANSACTIONS, src.HIGH_SEVERITY_COUNT,
+        src.ETL_DATE_CREATED
+    );

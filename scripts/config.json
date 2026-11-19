@@ -1,8 +1,8 @@
 {
   "snowflake": {
-    "account": "QRVKHLX-JM60697",
-    "user": "SHEKERCAM",
-    "password": "Amrutham@20156606",
+    "account": "IECUPYJ-FC82005",
+    "user": "SFCAM1",
+    "password": "Snowflake@20156606",
     "database": "sales",
     "schema_raw": "sales_raw",
     "schema_canonical": "sales_canonical",
@@ -15,15 +15,22 @@
     "storage_integration": "drl_sf_s3_int",
     "file_format": "parquet_format"
   },
+  "transforms": {
+    "transform_dir": "transform",
+    "task_schedule": "60 MINUTE",
+    "use_stored_procedures": true,
+    "enable_cdc_streams": true
+  },
   "directories": {
     "config": "config",
     "logs": "logs",
     "schema": "schema",
-    "templates": "templates"
+    "templates": "templates",
+    "transform": "transform"
   },
   "files": {
     "config": "config.json",
-    "manifest": "scripts/ingest_manifest.json",
+    "copy_manifest": "scripts/copy_data_manifest.json",
     "templates": {
       "file_formats": "file_formats.csv",
       "storage_integrations": "storage_integrations.csv",
