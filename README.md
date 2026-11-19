@@ -59,8 +59,8 @@ The project maintains an exact 1:1 alignment between table DDL schemas and trans
 | **Raw** | `masterdata` | `schema/raw/masterdata/contract_raw.yaml` | `transform/raw/masterdata/streams.sql` | `sales_raw.CONTRACT_RAW` & CDC Stream |
 | | `masterdata` | `schema/raw/masterdata/customer_raw.yaml` | `transform/raw/masterdata/streams.sql` | `sales_raw.CUSTOMER_RAW` & CDC Stream |
 | | `masterdata` | `schema/raw/masterdata/product_raw.yaml` | `transform/raw/masterdata/streams.sql` | `sales_raw.PRODUCT_RAW` & CDC Stream |
-| | `sales` | `schema/raw/sales/direct_sale_lines_raw.yaml` | `transform/raw/sales/stg_direct_sales.sql`<br>`transform/raw/sales/streams.sql` | `sales_raw.DIRECT_SALE_LINES_RAW`<br>`sales_raw.STG_DIRECT_SALES` (View) |
-| | `sales` | `schema/raw/sales/indirect_sale_lines_raw.yaml` | `transform/raw/sales/stg_indirect_sales.sql`<br>`transform/raw/sales/streams.sql` | `sales_raw.INDIRECT_SALE_LINES_RAW`<br>`sales_raw.STG_INDIRECT_SALES` (View) |
+| | `sales` | `schema/raw/sales/direct_sale_lines_raw.yaml` | `transform/raw/sales/streams.sql` | `sales_raw.DIRECT_SALE_LINES_RAW` & CDC Stream |
+| | `sales` | `schema/raw/sales/indirect_sale_lines_raw.yaml` | `transform/raw/sales/streams.sql` | `sales_raw.INDIRECT_SALE_LINES_RAW` & CDC Stream |
 | **Canonical** | `masterdata` | `schema/canonical/masterdata/contract.yaml` | `transform/canonical/masterdata/contract_dim.sql` | `sales_canonical.CONTRACT_DIM` |
 | | `masterdata` | `schema/canonical/masterdata/customer_dim.yaml` | `transform/canonical/masterdata/customer_dim.sql`<br>`transform/canonical/masterdata/streams.sql` | `sales_canonical.CUSTOMER_DIM` & CDC Stream |
 | | `masterdata` | `schema/canonical/masterdata/product_dim.yaml` | `transform/canonical/masterdata/product_dim.sql`<br>`transform/canonical/masterdata/streams.sql` | `sales_canonical.PRODUCT_DIM` & CDC Stream |
@@ -90,7 +90,7 @@ SF_DRL/
 ├── transform/                          # Snowflake Native Transformation SQL Scripts
 │   ├── raw/                            # Raw layer views and CDC streams
 │   │   ├── masterdata/                 # streams.sql
-│   │   └── sales/                      # stg_direct_sales.sql, stg_indirect_sales.sql, streams.sql
+│   │   └── sales/                      # streams.sql
 │   ├── canonical/                      # Canonical layer transformations & CDC streams
 │   │   ├── masterdata/                 # contract_dim.sql, customer_dim.sql, product_dim.sql, streams.sql
 │   │   └── sales/                      # sales_fact.sql, streams.sql, sales_fact_direct.sql, sales_fact_indirect.sql

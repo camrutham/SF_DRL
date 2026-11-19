@@ -20,8 +20,6 @@ using Snowflake Change Data Capture (CDC) Streams for zero full-table-scan incre
   - Staging Views & CDC Streams:
       transform/raw/masterdata/streams.sql
       transform/raw/sales/streams.sql
-      transform/raw/sales/stg_direct_sales.sql
-      transform/raw/sales/stg_indirect_sales.sql
       transform/canonical/masterdata/streams.sql
       transform/canonical/sales/streams.sql
 
@@ -330,9 +328,6 @@ def deploy_all(cur, cfg: dict, dry_run: bool = False) -> None:
         # Stage 1: Raw CDC Streams
         TRANSFORM_DIR / "raw" / "masterdata" / "streams.sql",
         TRANSFORM_DIR / "raw" / "sales" / "streams.sql",
-        # Stage 1: Raw Staging Views
-        TRANSFORM_DIR / "raw" / "sales" / "stg_direct_sales.sql",
-        TRANSFORM_DIR / "raw" / "sales" / "stg_indirect_sales.sql",
         # Stage 2: Canonical CDC Streams
         TRANSFORM_DIR / "canonical" / "masterdata" / "streams.sql",
         TRANSFORM_DIR / "canonical" / "sales" / "streams.sql",
