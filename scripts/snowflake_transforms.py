@@ -2,30 +2,38 @@
 """
 snowflake_transforms.py
 =======================
-Direct Snowflake Native Transformation Engine:
-Executes transformation SQL files directly from the `transform/` directory:
-  - Canonical Models (Pure DML):
-      transform/canonical/masterdata/contract_dim.sql
-      transform/canonical/masterdata/customer_dim.sql
-      transform/canonical/masterdata/product_dim.sql
-      transform/canonical/sales/sales_fact.sql
-  - Curated Models (Pure DML):
-      transform/curated/customer_analytics.sql
-      transform/curated/product_performance.sql
-      transform/curated/sales_summary.sql
+Direct Snowflake Native Transformation Engine (Stream-Based CDC Architecture):
+Executes pure SQL transformation models directly from the `transform/` directory
+using Snowflake Change Data Capture (CDC) Streams for zero full-table-scan incremental processing:
+
+  - Canonical Models (Stream CDC DML):
+      transform/canonical/masterdata/contract_dim.sql (CONTRACT_RAW_STREAM)
+      transform/canonical/masterdata/customer_dim.sql (CUSTOMER_RAW_STREAM)
+      transform/canonical/masterdata/product_dim.sql (PRODUCT_RAW_STREAM)
+      transform/canonical/sales/sales_fact.sql (DIRECT & INDIRECT SALE LINES RAW STREAMS)
+
+  - Curated Models (Stream CDC Rollup DML):
+      transform/curated/customer_analytics.sql (CUSTOMER_DIM_STREAM, SALES_FACT_STREAM_CUSTOMER)
+      transform/curated/product_performance.sql (PRODUCT_DIM_STREAM, SALES_FACT_STREAM_PRODUCT)
+      transform/curated/sales_summary.sql (SALES_FACT_STREAM_SUMMARY)
+
   - Staging Views & CDC Streams:
-      transform/raw/sales/
-      transform/raw/masterdata/
+      transform/raw/masterdata/streams.sql
+      transform/raw/sales/streams.sql
+      transform/raw/sales/stg_direct_sales.sql
+      transform/raw/sales/stg_indirect_sales.sql
+      transform/canonical/masterdata/streams.sql
+      transform/canonical/sales/streams.sql
 
 Features:
-  - 100% Single Source of Truth: No stored_procedures.sql file. Logic lives ONLY in transform/ files.
-  - Incremental Load (default): Evaluates watermark filter (> MAX target date) directly in pure DML.
-  - Full Refresh (--full-refresh): Truncates target table before executing the DML.
+  - High-Performance CDC: Queries only changed rows recorded in Snowflake Streams.
+  - Skip on Empty Streams: Evaluates SYSTEM$STREAM_HAS_DATA() before executing DML; skips empty streams with 0 warehouse cost.
+  - Full Refresh (--full-refresh): Truncates target table, queries base table, and resets stream offsets.
 
 Usage:
   python scripts/snowflake_transforms.py --deploy               # Deploy staging views & CDC streams
-  python scripts/snowflake_transforms.py --stage all            # Execute all transformations (incremental)
-  python scripts/snowflake_transforms.py --stage all --full-refresh # Full refresh (truncate & reload)
+  python scripts/snowflake_transforms.py --stage all            # Execute all transformations (Stream CDC incremental)
+  python scripts/snowflake_transforms.py --stage all --full-refresh # Full refresh (truncate & reload from base)
   python scripts/snowflake_transforms.py --stage canonical      # Execute canonical stage only
   python scripts/snowflake_transforms.py --stage curated        # Execute curated stage only
   python scripts/snowflake_transforms.py --dry-run              # Preview SQL statements without executing
@@ -81,6 +89,33 @@ def format_sql(raw_sql: str, cfg: dict) -> str:
     )
 
 
+def transform_sql_for_full_refresh(sql_text: str) -> str:
+    """
+    Transform stream-based CDC SQL into full-refresh SQL against base tables.
+    Replaces stream references with base tables and removes stream metadata filters.
+    """
+    # 1. Masterdata raw streams -> raw tables
+    sql = sql_text.replace("CONTRACT_RAW_STREAM", "CONTRACT_RAW")
+    sql = sql.replace("CUSTOMER_RAW_STREAM", "CUSTOMER_RAW")
+    sql = sql.replace("PRODUCT_RAW_STREAM", "PRODUCT_RAW")
+
+    # 2. Sales raw streams -> raw tables
+    sql = sql.replace("DIRECT_SALE_LINES_RAW_STREAM", "DIRECT_SALE_LINES_RAW")
+    sql = sql.replace("INDIRECT_SALE_LINES_RAW_STREAM", "INDIRECT_SALE_LINES_RAW")
+
+    # 3. Canonical streams -> canonical tables
+    sql = sql.replace("CUSTOMER_DIM_STREAM", "CUSTOMER_DIM")
+    sql = sql.replace("PRODUCT_DIM_STREAM", "PRODUCT_DIM")
+    sql = sql.replace("SALES_FACT_STREAM_SUMMARY", "SALES_FACT")
+    sql = sql.replace("SALES_FACT_STREAM_CUSTOMER", "SALES_FACT")
+    sql = sql.replace("SALES_FACT_STREAM_PRODUCT", "SALES_FACT")
+
+    # 4. Remove METADATA$ACTION filters
+    sql = re.sub(r"WHERE\s+([a-zA-Z0-9_]+\.)?METADATA\$ACTION\s*=\s*'INSERT'", "WHERE 1=1", sql, flags=re.IGNORECASE)
+
+    return sql
+
+
 def extract_statements(sql_text: str) -> List[str]:
     """Split SQL file into executable statements handling comments and semicolons."""
     raw_stmts = [s.strip() for s in sql_text.split(";") if s.strip()]
@@ -117,28 +152,48 @@ def execute_sql_file(cur, file_path: Path, cfg: dict, dry_run: bool = False) -> 
 
 
 # ==========================================================
-# Model Specifications: Direct Single Source of Truth
+# Model Specifications: Stream CDC Single Source of Truth
 # ==========================================================
 CANONICAL_MODELS = [
     {
         "table": "CONTRACT_DIM",
         "file": TRANSFORM_DIR / "canonical" / "masterdata" / "contract_dim.sql",
         "schema_key": "schema_canonical",
+        "streams": ["{DATABASE}.{SCHEMA_RAW}.CONTRACT_RAW_STREAM"],
+        "reset_streams_sql": [
+            "CREATE OR REPLACE STREAM {DATABASE}.{SCHEMA_RAW}.CONTRACT_RAW_STREAM ON TABLE {DATABASE}.{SCHEMA_RAW}.CONTRACT_RAW APPEND_ONLY = FALSE COMMENT = 'CDC stream tracking inserts and updates on CONTRACT_RAW';"
+        ],
     },
     {
         "table": "CUSTOMER_DIM",
         "file": TRANSFORM_DIR / "canonical" / "masterdata" / "customer_dim.sql",
         "schema_key": "schema_canonical",
+        "streams": ["{DATABASE}.{SCHEMA_RAW}.CUSTOMER_RAW_STREAM"],
+        "reset_streams_sql": [
+            "CREATE OR REPLACE STREAM {DATABASE}.{SCHEMA_RAW}.CUSTOMER_RAW_STREAM ON TABLE {DATABASE}.{SCHEMA_RAW}.CUSTOMER_RAW APPEND_ONLY = FALSE COMMENT = 'CDC stream tracking inserts and updates on CUSTOMER_RAW';"
+        ],
     },
     {
         "table": "PRODUCT_DIM",
         "file": TRANSFORM_DIR / "canonical" / "masterdata" / "product_dim.sql",
         "schema_key": "schema_canonical",
+        "streams": ["{DATABASE}.{SCHEMA_RAW}.PRODUCT_RAW_STREAM"],
+        "reset_streams_sql": [
+            "CREATE OR REPLACE STREAM {DATABASE}.{SCHEMA_RAW}.PRODUCT_RAW_STREAM ON TABLE {DATABASE}.{SCHEMA_RAW}.PRODUCT_RAW APPEND_ONLY = FALSE COMMENT = 'CDC stream tracking inserts and updates on PRODUCT_RAW';"
+        ],
     },
     {
         "table": "SALES_FACT",
         "file": TRANSFORM_DIR / "canonical" / "sales" / "sales_fact.sql",
         "schema_key": "schema_canonical",
+        "streams": [
+            "{DATABASE}.{SCHEMA_RAW}.DIRECT_SALE_LINES_RAW_STREAM",
+            "{DATABASE}.{SCHEMA_RAW}.INDIRECT_SALE_LINES_RAW_STREAM",
+        ],
+        "reset_streams_sql": [
+            "CREATE OR REPLACE STREAM {DATABASE}.{SCHEMA_RAW}.DIRECT_SALE_LINES_RAW_STREAM ON TABLE {DATABASE}.{SCHEMA_RAW}.DIRECT_SALE_LINES_RAW APPEND_ONLY = FALSE COMMENT = 'CDC stream tracking inserts and updates on DIRECT_SALE_LINES_RAW';",
+            "CREATE OR REPLACE STREAM {DATABASE}.{SCHEMA_RAW}.INDIRECT_SALE_LINES_RAW_STREAM ON TABLE {DATABASE}.{SCHEMA_RAW}.INDIRECT_SALE_LINES_RAW APPEND_ONLY = FALSE COMMENT = 'CDC stream tracking inserts and updates on INDIRECT_SALE_LINES_RAW';",
+        ],
     },
 ]
 
@@ -147,22 +202,44 @@ CURATED_MODELS = [
         "table": "CUSTOMER_ANALYTICS",
         "file": TRANSFORM_DIR / "curated" / "customer_analytics.sql",
         "schema_key": "schema_curated",
+        "streams": [
+            "{DATABASE}.{SCHEMA_CANONICAL}.CUSTOMER_DIM_STREAM",
+            "{DATABASE}.{SCHEMA_CANONICAL}.SALES_FACT_STREAM_CUSTOMER",
+        ],
+        "reset_streams_sql": [
+            "CREATE OR REPLACE STREAM {DATABASE}.{SCHEMA_CANONICAL}.CUSTOMER_DIM_STREAM ON TABLE {DATABASE}.{SCHEMA_CANONICAL}.CUSTOMER_DIM APPEND_ONLY = FALSE COMMENT = 'CDC stream tracking changes on CUSTOMER_DIM for curated downstream aggregations';",
+            "CREATE OR REPLACE STREAM {DATABASE}.{SCHEMA_CANONICAL}.SALES_FACT_STREAM_CUSTOMER ON TABLE {DATABASE}.{SCHEMA_CANONICAL}.SALES_FACT APPEND_ONLY = FALSE COMMENT = 'CDC stream tracking changes on SALES_FACT for CUSTOMER_ANALYTICS';",
+        ],
     },
     {
         "table": "PRODUCT_PERFORMANCE",
         "file": TRANSFORM_DIR / "curated" / "product_performance.sql",
         "schema_key": "schema_curated",
+        "streams": [
+            "{DATABASE}.{SCHEMA_CANONICAL}.PRODUCT_DIM_STREAM",
+            "{DATABASE}.{SCHEMA_CANONICAL}.SALES_FACT_STREAM_PRODUCT",
+        ],
+        "reset_streams_sql": [
+            "CREATE OR REPLACE STREAM {DATABASE}.{SCHEMA_CANONICAL}.PRODUCT_DIM_STREAM ON TABLE {DATABASE}.{SCHEMA_CANONICAL}.PRODUCT_DIM APPEND_ONLY = FALSE COMMENT = 'CDC stream tracking changes on PRODUCT_DIM for curated downstream aggregations';",
+            "CREATE OR REPLACE STREAM {DATABASE}.{SCHEMA_CANONICAL}.SALES_FACT_STREAM_PRODUCT ON TABLE {DATABASE}.{SCHEMA_CANONICAL}.SALES_FACT APPEND_ONLY = FALSE COMMENT = 'CDC stream tracking changes on SALES_FACT for PRODUCT_PERFORMANCE';",
+        ],
     },
     {
         "table": "SALES_SUMMARY",
         "file": TRANSFORM_DIR / "curated" / "sales_summary.sql",
         "schema_key": "schema_curated",
+        "streams": [
+            "{DATABASE}.{SCHEMA_CANONICAL}.SALES_FACT_STREAM_SUMMARY",
+        ],
+        "reset_streams_sql": [
+            "CREATE OR REPLACE STREAM {DATABASE}.{SCHEMA_CANONICAL}.SALES_FACT_STREAM_SUMMARY ON TABLE {DATABASE}.{SCHEMA_CANONICAL}.SALES_FACT APPEND_ONLY = FALSE COMMENT = 'CDC stream tracking changes on SALES_FACT for SALES_SUMMARY rollup';",
+        ],
     },
 ]
 
 
 def execute_model(cur, model_spec: dict, cfg: dict, full_refresh: bool = False, dry_run: bool = False) -> str:
-    """Read and execute a transformation model SQL file directly against Snowflake."""
+    """Read and execute a transformation model SQL file directly against Snowflake using CDC Streams."""
     snow_cfg = cfg["snowflake"]
     db = snow_cfg["database"]
     schema = snow_cfg[model_spec["schema_key"]]
@@ -175,7 +252,32 @@ def execute_model(cur, model_spec: dict, cfg: dict, full_refresh: bool = False, 
     rel_path = file_path.relative_to(PROJECT_ROOT)
     logging.info(f"📄 Running model: {table} ({rel_path})...")
 
-    # If full refresh requested, truncate target table first
+    # 1. CDC Stream Check (Incremental only)
+    if not full_refresh and model_spec.get("streams"):
+        has_any_data = False
+        stream_names = [format_sql(s, cfg) for s in model_spec["streams"]]
+        if dry_run:
+            has_any_data = True
+            logging.info(f"[DRY-RUN] Checked SYSTEM$STREAM_HAS_DATA on: {', '.join(stream_names)}")
+        else:
+            for s_name in stream_names:
+                try:
+                    cur.execute(f"SELECT SYSTEM$STREAM_HAS_DATA('{s_name}')")
+                    row = cur.fetchone()
+                    if row and row[0]:
+                        has_any_data = True
+                        logging.info(f"⚡ CDC Stream {s_name} has new data.")
+                        break
+                except Exception as stream_err:
+                    logging.warning(f"⚠️ Could not check stream {s_name}: {stream_err}. Proceeding with execution.")
+                    has_any_data = True
+                    break
+
+            if not has_any_data:
+                logging.info(f"⏭️ Skipping {table}: No new CDC changes in streams ({', '.join(stream_names)}).")
+                return f"SKIPPED: {table} (No CDC stream data)"
+
+    # 2. If full refresh requested, truncate target table first
     if full_refresh:
         truncate_sql = f"TRUNCATE TABLE {db}.{schema}.{table};"
         if dry_run:
@@ -189,6 +291,9 @@ def execute_model(cur, model_spec: dict, cfg: dict, full_refresh: bool = False, 
         raw_sql = f.read()
 
     formatted_sql = format_sql(raw_sql, cfg)
+    if full_refresh:
+        formatted_sql = transform_sql_for_full_refresh(formatted_sql)
+
     stmts = extract_statements(formatted_sql)
 
     rows_affected = 0
@@ -203,21 +308,35 @@ def execute_model(cur, model_spec: dict, cfg: dict, full_refresh: bool = False, 
                 rows_affected += cur.rowcount
             logging.info(f"✅ Executed DML for {table}")
 
+    # 3. If full refresh, reset stream offsets so they start fresh from now
+    if full_refresh and model_spec.get("reset_streams_sql"):
+        for reset_stmt_tmpl in model_spec["reset_streams_sql"]:
+            reset_stmt = format_sql(reset_stmt_tmpl, cfg)
+            if dry_run:
+                logging.info(f"[DRY-RUN] Reset stream: {reset_stmt}")
+            else:
+                logging.info(f"🔄 Resetting stream offset: {reset_stmt[:80]}...")
+                cur.execute(reset_stmt)
+                logging.info("✅ Stream offset reset.")
+
     return f"SUCCESS: {table} loaded (Full refresh: {full_refresh}). Rows affected: {rows_affected}"
 
 
 def deploy_all(cur, cfg: dict, dry_run: bool = False) -> None:
     """Deploy transformation views and CDC streams directly from transform/."""
-    logging.info("🚀 Deploying Snowflake Native Transformation Objects from transform/...")
+    logging.info("🚀 Deploying Snowflake Native Transformation Objects & CDC Streams...")
 
     deploy_order = [
-        # Stage 1: Raw / Staging views
-        TRANSFORM_DIR / "raw" / "sales" / "stg_direct_sales.sql",
-        TRANSFORM_DIR / "raw" / "sales" / "stg_indirect_sales.sql",
-        # CDC Streams
+        # Stage 1: Raw CDC Streams
         TRANSFORM_DIR / "raw" / "masterdata" / "streams.sql",
         TRANSFORM_DIR / "raw" / "sales" / "streams.sql",
-        # Stage 2: Canonical helper views
+        # Stage 1: Raw Staging Views
+        TRANSFORM_DIR / "raw" / "sales" / "stg_direct_sales.sql",
+        TRANSFORM_DIR / "raw" / "sales" / "stg_indirect_sales.sql",
+        # Stage 2: Canonical CDC Streams
+        TRANSFORM_DIR / "canonical" / "masterdata" / "streams.sql",
+        TRANSFORM_DIR / "canonical" / "sales" / "streams.sql",
+        # Stage 2: Canonical Projection Views
         TRANSFORM_DIR / "canonical" / "sales" / "sales_fact_direct.sql",
         TRANSFORM_DIR / "canonical" / "sales" / "sales_fact_indirect.sql",
     ]
@@ -225,7 +344,7 @@ def deploy_all(cur, cfg: dict, dry_run: bool = False) -> None:
     for sql_file in deploy_order:
         execute_sql_file(cur, sql_file, cfg, dry_run=dry_run)
 
-    logging.info("✅ All Snowflake Native transformation objects successfully deployed (Direct file execution mode).")
+    logging.info("✅ All Snowflake Native transformation objects & CDC streams successfully deployed.")
 
 
 def run_canonical(cur, cfg: dict, full_refresh: bool = False, dry_run: bool = False) -> str:
@@ -268,7 +387,7 @@ def run_full_pipeline(cur, cfg: dict, full_refresh: bool = False, dry_run: bool 
 
 def main() -> int:
     parser = argparse.ArgumentParser(
-        description="Snowflake Native Data Transformation Engine (Direct Transform File Execution)."
+        description="Snowflake Native Data Transformation Engine (Stream-Based CDC Architecture)."
     )
     parser.add_argument(
         "--deploy",
@@ -284,7 +403,7 @@ def main() -> int:
     parser.add_argument(
         "--full-refresh",
         action="store_true",
-        help="Perform a full refresh (truncate targets and reload all data from raw).",
+        help="Perform a full refresh (truncate targets and reload all data from base tables).",
     )
     parser.add_argument(
         "--dry-run",

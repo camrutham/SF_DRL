@@ -1,16 +1,30 @@
 -- =====================================================================
 -- transform/curated/product_performance.sql
--- Product Performance Aggregation Transformation (Pure DML)
+-- Product Performance Aggregation Transformation (Stream CDC DML)
 -- Target Table: {DATABASE}.{SCHEMA_CURATED}.PRODUCT_PERFORMANCE
 -- Source Tables: {DATABASE}.{SCHEMA_CANONICAL}.PRODUCT_DIM, SALES_FACT
+-- Source Streams:
+--   - {DATABASE}.{SCHEMA_CANONICAL}.PRODUCT_DIM_STREAM
+--   - {DATABASE}.{SCHEMA_CANONICAL}.SALES_FACT_STREAM_PRODUCT
 --
 -- Load Behavior:
---   - Full & Incremental Upsert: Aggregates current product dimensions
---     and sales fact lines, updating existing metrics and inserting new.
+--   - Incremental Load (Stream CDC): Re-aggregates metrics ONLY for
+--     products that changed in PRODUCT_DIM_STREAM or had new sales
+--     lines in SALES_FACT_STREAM_PRODUCT.
+--   - Full Refresh: Re-aggregates entire product catalog.
 -- =====================================================================
 
 MERGE INTO {DATABASE}.{SCHEMA_CURATED}.PRODUCT_PERFORMANCE tgt
 USING (
+    WITH changed_products AS (
+        SELECT DISTINCT PRODUCT_ID
+        FROM {DATABASE}.{SCHEMA_CANONICAL}.PRODUCT_DIM_STREAM
+        WHERE METADATA$ACTION = 'INSERT'
+        UNION
+        SELECT DISTINCT PRODUCT_ID
+        FROM {DATABASE}.{SCHEMA_CANONICAL}.SALES_FACT_STREAM_PRODUCT
+        WHERE METADATA$ACTION = 'INSERT'
+    )
     SELECT
         p.PRODUCT_ID,
         p.PRODUCT_NAME,
@@ -25,6 +39,8 @@ USING (
         SUM(CASE WHEN f.LINE_SEVERITY_FLAG = TRUE THEN 1 ELSE 0 END) AS HIGH_SEVERITY_COUNT,
         CURRENT_TIMESTAMP() AS ETL_DATE_CREATED
     FROM {DATABASE}.{SCHEMA_CANONICAL}.PRODUCT_DIM p
+    INNER JOIN changed_products cp
+        ON p.PRODUCT_ID = cp.PRODUCT_ID
     LEFT JOIN {DATABASE}.{SCHEMA_CANONICAL}.SALES_FACT f
         ON p.PRODUCT_ID = f.PRODUCT_ID
     GROUP BY

@@ -1,78 +1,81 @@
 -- =====================================================================
 -- transform/canonical/sales/sales_fact.sql
--- Consolidated Sales Fact Transformation (Pure DML)
+-- Consolidated Sales Fact Transformation (Stream CDC DML)
 -- Target Table: {DATABASE}.{SCHEMA_CANONICAL}.SALES_FACT
--- Source Tables: {DATABASE}.{SCHEMA_RAW}.STG_DIRECT_SALES, STG_INDIRECT_SALES
+-- Source Streams:
+--   - {DATABASE}.{SCHEMA_RAW}.DIRECT_SALE_LINES_RAW_STREAM
+--   - {DATABASE}.{SCHEMA_RAW}.INDIRECT_SALE_LINES_RAW_STREAM
 --
 -- Load Behavior:
---   - Full Load: When target is empty (or truncated), COALESCE defaults
---     to '1900-01-01', loading and inserting all direct & indirect sales.
---   - Incremental Load: When target has data, filters records where
---     DATE_UPDATED > MAX(target date), updating matched lines and inserting new.
+--   - Incremental Load (Stream CDC): Atomically consumes inserted/updated
+--     delta records from both direct and indirect sales streams.
+--   - Full Refresh: Truncates target table, queries base tables, and resets
+--     the stream offsets.
 -- =====================================================================
 
 MERGE INTO {DATABASE}.{SCHEMA_CANONICAL}.SALES_FACT tgt
 USING (
-    WITH combined_sales AS (
+    WITH direct_changes AS (
         SELECT
-            s.SALE_LINE_ID AS SRC_SYS_ID,
-            s.SALE_LINE_ID::VARCHAR AS SALE_LINE_ID,
-            s.CUSTOMER_ID,
-            s.PRODUCT_ID,
-            s.CONTRACT_ID,
-            s.SUBMISSION_ID,
-            s.SALE_TYPE,
-            s.INV_DATE,
-            s.INV_QTY,
-            s.INV_AMT,
-            s.DISC_REQUESTED,
-            s.DISC_PAID,
-            s.LINE_SEVERITY,
-            s.INV_AMT AS GROSS_SALES,
-            (s.INV_AMT - COALESCE(s.DISC_PAID, 0)) AS NET_AMOUNT,
-            COALESCE(s.DISC_PAID, 0) AS DISCOUNT_AMOUNT,
-            CASE WHEN s.INV_AMT = 0 THEN NULL ELSE (COALESCE(s.DISC_PAID, 0) / s.INV_AMT) * 100 END AS DISCOUNT_PERCENT,
-            CASE WHEN COALESCE(s.LINE_SEVERITY, '') = 'HIGH' THEN TRUE ELSE FALSE END AS LINE_SEVERITY_FLAG,
-            s.SRC_SYS_DATE_CREATED,
-            s.SRC_SYS_DATE_UPDATED,
-            s.ETL_DATE_CREATED,
-            s.ETL_DATE_UPDATED,
-            s.SOURCE_SYSTEM,
-            s.DATE_UPDATED
-        FROM {DATABASE}.{SCHEMA_RAW}.STG_DIRECT_SALES s
-
+            d.SALE_LINE_ID AS SRC_SYS_ID,
+            d.SALE_LINE_ID::VARCHAR AS SALE_LINE_ID,
+            d.CUSTOMER_ID,
+            d.PRODUCT_ID,
+            d.CONTRACT_ID,
+            d.SUBMISSION_ID,
+            'DIRECT' AS SALE_TYPE,
+            d.INV_DATE,
+            d.INV_QTY,
+            d.INV_AMT,
+            d.DISC_REQUESTED,
+            d.DISC_PAID,
+            d.LINE_SEVERITY,
+            d.INV_AMT AS GROSS_SALES,
+            (d.INV_AMT - COALESCE(d.DISC_PAID, 0)) AS NET_AMOUNT,
+            COALESCE(d.DISC_PAID, 0) AS DISCOUNT_AMOUNT,
+            CASE WHEN d.INV_AMT = 0 THEN NULL ELSE (COALESCE(d.DISC_PAID, 0) / d.INV_AMT) * 100 END AS DISCOUNT_PERCENT,
+            CASE WHEN COALESCE(d.LINE_SEVERITY, '') = 'HIGH' THEN TRUE ELSE FALSE END AS LINE_SEVERITY_FLAG,
+            d.DATE_CREATED AS SRC_SYS_DATE_CREATED,
+            d.DATE_UPDATED AS SRC_SYS_DATE_UPDATED,
+            'sales' AS SOURCE_SYSTEM,
+            d.DATE_UPDATED
+        FROM {DATABASE}.{SCHEMA_RAW}.DIRECT_SALE_LINES_RAW_STREAM d
+        WHERE d.METADATA$ACTION = 'INSERT'
+    ),
+    indirect_changes AS (
+        SELECT
+            i.SALE_LINE_ID AS SRC_SYS_ID,
+            i.SALE_LINE_ID::VARCHAR AS SALE_LINE_ID,
+            i.CUSTOMER_ID,
+            i.PRODUCT_ID,
+            i.CONTRACT_ID,
+            i.SUBMISSION_ID,
+            'INDIRECT' AS SALE_TYPE,
+            i.INV_DATE,
+            i.INV_QTY,
+            i.INV_AMT,
+            i.DISC_REQUESTED,
+            i.DISC_PAID,
+            i.LINE_SEVERITY,
+            i.INV_AMT AS GROSS_SALES,
+            (i.INV_AMT - COALESCE(i.DISC_PAID, 0)) AS NET_AMOUNT,
+            COALESCE(i.DISC_PAID, 0) AS DISCOUNT_AMOUNT,
+            CASE WHEN i.INV_AMT = 0 THEN NULL ELSE (COALESCE(i.DISC_PAID, 0) / i.INV_AMT) * 100 END AS DISCOUNT_PERCENT,
+            CASE WHEN COALESCE(i.LINE_SEVERITY, '') = 'HIGH' THEN TRUE ELSE FALSE END AS LINE_SEVERITY_FLAG,
+            i.DATE_CREATED AS SRC_SYS_DATE_CREATED,
+            i.DATE_UPDATED AS SRC_SYS_DATE_UPDATED,
+            'sales' AS SOURCE_SYSTEM,
+            i.DATE_UPDATED
+        FROM {DATABASE}.{SCHEMA_RAW}.INDIRECT_SALE_LINES_RAW_STREAM i
+        WHERE i.METADATA$ACTION = 'INSERT'
+    ),
+    combined_sales AS (
+        SELECT * FROM direct_changes
         UNION ALL
-
-        SELECT
-            s.SALE_LINE_ID AS SRC_SYS_ID,
-            s.SALE_LINE_ID::VARCHAR AS SALE_LINE_ID,
-            s.CUSTOMER_ID,
-            s.PRODUCT_ID,
-            s.CONTRACT_ID,
-            s.SUBMISSION_ID,
-            s.SALE_TYPE,
-            s.INV_DATE,
-            s.INV_QTY,
-            s.INV_AMT,
-            s.DISC_REQUESTED,
-            s.DISC_PAID,
-            s.LINE_SEVERITY,
-            s.INV_AMT AS GROSS_SALES,
-            (s.INV_AMT - COALESCE(s.DISC_PAID, 0)) AS NET_AMOUNT,
-            COALESCE(s.DISC_PAID, 0) AS DISCOUNT_AMOUNT,
-            CASE WHEN s.INV_AMT = 0 THEN NULL ELSE (COALESCE(s.DISC_PAID, 0) / s.INV_AMT) * 100 END AS DISCOUNT_PERCENT,
-            CASE WHEN COALESCE(s.LINE_SEVERITY, '') = 'HIGH' THEN TRUE ELSE FALSE END AS LINE_SEVERITY_FLAG,
-            s.SRC_SYS_DATE_CREATED,
-            s.SRC_SYS_DATE_UPDATED,
-            s.ETL_DATE_CREATED,
-            s.ETL_DATE_UPDATED,
-            s.SOURCE_SYSTEM,
-            s.DATE_UPDATED
-        FROM {DATABASE}.{SCHEMA_RAW}.STG_INDIRECT_SALES s
+        SELECT * FROM indirect_changes
     )
     SELECT * FROM combined_sales
-    WHERE DATE_UPDATED > COALESCE((SELECT MAX(COALESCE(SRC_SYS_DATE_UPDATED, ETL_DATE_UPDATED)) FROM {DATABASE}.{SCHEMA_CANONICAL}.SALES_FACT), '1900-01-01'::TIMESTAMP_NTZ)
-       OR SRC_SYS_DATE_UPDATED > COALESCE((SELECT MAX(COALESCE(SRC_SYS_DATE_UPDATED, ETL_DATE_UPDATED)) FROM {DATABASE}.{SCHEMA_CANONICAL}.SALES_FACT), '1900-01-01'::TIMESTAMP_NTZ)
+    QUALIFY ROW_NUMBER() OVER (PARTITION BY SRC_SYS_ID, SALE_TYPE ORDER BY DATE_UPDATED DESC) = 1
 ) src
 ON tgt.SRC_SYS_ID = src.SRC_SYS_ID AND tgt.SALE_TYPE = src.SALE_TYPE
 WHEN MATCHED THEN

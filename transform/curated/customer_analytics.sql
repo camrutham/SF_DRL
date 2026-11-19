@@ -1,16 +1,30 @@
 -- =====================================================================
 -- transform/curated/customer_analytics.sql
--- Customer Analytics Aggregation Transformation (Pure DML)
+-- Customer Analytics Aggregation Transformation (Stream CDC DML)
 -- Target Table: {DATABASE}.{SCHEMA_CURATED}.CUSTOMER_ANALYTICS
 -- Source Tables: {DATABASE}.{SCHEMA_CANONICAL}.CUSTOMER_DIM, SALES_FACT
+-- Source Streams:
+--   - {DATABASE}.{SCHEMA_CANONICAL}.CUSTOMER_DIM_STREAM
+--   - {DATABASE}.{SCHEMA_CANONICAL}.SALES_FACT_STREAM_CUSTOMER
 --
 -- Load Behavior:
---   - Full & Incremental Upsert: Aggregates current customer dimensions
---     and sales fact lines, updating existing metrics and inserting new.
+--   - Incremental Load (Stream CDC): Re-aggregates metrics ONLY for
+--     customers that changed in CUSTOMER_DIM_STREAM or had new sales
+--     lines in SALES_FACT_STREAM_CUSTOMER.
+--   - Full Refresh: Re-aggregates entire customer base.
 -- =====================================================================
 
 MERGE INTO {DATABASE}.{SCHEMA_CURATED}.CUSTOMER_ANALYTICS tgt
 USING (
+    WITH changed_customers AS (
+        SELECT DISTINCT CUSTOMER_ID
+        FROM {DATABASE}.{SCHEMA_CANONICAL}.CUSTOMER_DIM_STREAM
+        WHERE METADATA$ACTION = 'INSERT'
+        UNION
+        SELECT DISTINCT CUSTOMER_ID
+        FROM {DATABASE}.{SCHEMA_CANONICAL}.SALES_FACT_STREAM_CUSTOMER
+        WHERE METADATA$ACTION = 'INSERT'
+    )
     SELECT
         c.CUSTOMER_ID,
         c.CUSTOMER_NAME,
@@ -26,6 +40,8 @@ USING (
         SUM(CASE WHEN f.LINE_SEVERITY_FLAG = TRUE THEN 1 ELSE 0 END) AS HIGH_SEVERITY_COUNT,
         CURRENT_TIMESTAMP() AS ETL_DATE_CREATED
     FROM {DATABASE}.{SCHEMA_CANONICAL}.CUSTOMER_DIM c
+    INNER JOIN changed_customers cc
+        ON c.CUSTOMER_ID = cc.CUSTOMER_ID
     LEFT JOIN {DATABASE}.{SCHEMA_CANONICAL}.SALES_FACT f
         ON c.CUSTOMER_ID = f.CUSTOMER_ID
     GROUP BY

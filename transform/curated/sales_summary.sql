@@ -1,16 +1,24 @@
 -- =====================================================================
 -- transform/curated/sales_summary.sql
--- Daily Sales Summary Rollup Transformation (Pure DML)
+-- Daily Sales Summary Rollup Transformation (Stream CDC DML)
 -- Target Table: {DATABASE}.{SCHEMA_CURATED}.SALES_SUMMARY
 -- Source Table: {DATABASE}.{SCHEMA_CANONICAL}.SALES_FACT
+-- Source Stream: {DATABASE}.{SCHEMA_CANONICAL}.SALES_FACT_STREAM_SUMMARY
 --
 -- Load Behavior:
---   - Full & Incremental Upsert: Aggregates sales by date, customer,
---     product, and contract, updating matched rows and inserting new.
+--   - Incremental Load (Stream CDC): Re-aggregates daily metrics ONLY for
+--     the specific date/customer/product/contract/sale_type slices that
+--     changed in SALES_FACT_STREAM_SUMMARY.
+--   - Full Refresh: Re-aggregates entire history across all slices.
 -- =====================================================================
 
 MERGE INTO {DATABASE}.{SCHEMA_CURATED}.SALES_SUMMARY tgt
 USING (
+    WITH changed_keys AS (
+        SELECT DISTINCT INV_DATE, CUSTOMER_ID, PRODUCT_ID, CONTRACT_ID, SALE_TYPE
+        FROM {DATABASE}.{SCHEMA_CANONICAL}.SALES_FACT_STREAM_SUMMARY
+        WHERE METADATA$ACTION = 'INSERT'
+    )
     SELECT
         f.INV_DATE AS SALES_DATE,
         f.CUSTOMER_ID,
@@ -26,6 +34,12 @@ USING (
         SUM(CASE WHEN f.LINE_SEVERITY_FLAG = TRUE THEN 1 ELSE 0 END) AS HIGH_SEVERITY_LINES,
         CURRENT_TIMESTAMP() AS ETL_DATE_CREATED
     FROM {DATABASE}.{SCHEMA_CANONICAL}.SALES_FACT f
+    INNER JOIN changed_keys k
+        ON f.INV_DATE = k.INV_DATE
+       AND f.CUSTOMER_ID = k.CUSTOMER_ID
+       AND f.PRODUCT_ID = k.PRODUCT_ID
+       AND f.CONTRACT_ID = k.CONTRACT_ID
+       AND f.SALE_TYPE = k.SALE_TYPE
     GROUP BY
         f.INV_DATE,
         f.CUSTOMER_ID,

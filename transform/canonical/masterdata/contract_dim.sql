@@ -1,14 +1,14 @@
 -- =====================================================================
 -- transform/canonical/masterdata/contract_dim.sql
--- Contract Dimension SCD Type 2 Transformation (Pure DML)
+-- Contract Dimension SCD Type 2 Transformation (Stream CDC DML)
 -- Target Table: {DATABASE}.{SCHEMA_CANONICAL}.CONTRACT_DIM
--- Source Table: {DATABASE}.{SCHEMA_RAW}.CONTRACT_RAW
+-- Source Stream: {DATABASE}.{SCHEMA_RAW}.CONTRACT_RAW_STREAM
 --
 -- Load Behavior:
---   - Full Load: When target is empty (or truncated), COALESCE defaults
---     to '1900-01-01', loading and inserting all source records.
---   - Incremental Load: When target has data, filters records where
---     DATE_UPDATED > MAX(target date), updating matched rows and inserting new.
+--   - Incremental Load (Stream CDC): Consumes only inserted/updated delta
+--     records from CONTRACT_RAW_STREAM (METADATA$ACTION = 'INSERT').
+--   - Full Refresh: Truncates target table, queries base table, and resets
+--     the stream offset.
 -- =====================================================================
 
 MERGE INTO {DATABASE}.{SCHEMA_CANONICAL}.CONTRACT_DIM tgt
@@ -35,11 +35,9 @@ USING (
         CURRENT_TIMESTAMP()                         AS DATE_CREATED,
         CURRENT_TIMESTAMP()                         AS DATE_UPDATED,
         'sales'                                     AS SOURCE_SYSTEM
-    FROM {DATABASE}.{SCHEMA_RAW}.CONTRACT_RAW c
-    WHERE c.DATE_UPDATED > COALESCE(
-        (SELECT MAX(COALESCE(SRC_SYS_DATE_UPDATED, DATE_UPDATED)) FROM {DATABASE}.{SCHEMA_CANONICAL}.CONTRACT_DIM),
-        '1900-01-01'::TIMESTAMP_NTZ
-    )
+    FROM {DATABASE}.{SCHEMA_RAW}.CONTRACT_RAW_STREAM c
+    WHERE c.METADATA$ACTION = 'INSERT'
+    QUALIFY ROW_NUMBER() OVER (PARTITION BY c.CONTRACT_ID ORDER BY c.DATE_UPDATED DESC) = 1
 ) src
 ON tgt.SRC_SYS_ID = src.SRC_SYS_ID
 WHEN MATCHED THEN
