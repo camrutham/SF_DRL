@@ -2,25 +2,33 @@
 """
 snowflake_transforms.py
 =======================
-Snowflake Native Transformation Engine & Orchestrator:
-Executes transformations organized under the `transform/` directory:
-  - Models (Pure DML):
-      transform/canonical/masterdata/ & transform/canonical/sales/
-      transform/curated/
-  - Orchestration (Stored Procedures, Tasks, Dynamic Tables):
-      transform/orchestration/
+Direct Snowflake Native Transformation Engine:
+Executes transformation SQL files directly from the `transform/` directory:
+  - Canonical Models (Pure DML):
+      transform/canonical/masterdata/contract_dim.sql
+      transform/canonical/masterdata/customer_dim.sql
+      transform/canonical/masterdata/product_dim.sql
+      transform/canonical/sales/sales_fact.sql
+  - Curated Models (Pure DML):
+      transform/curated/customer_analytics.sql
+      transform/curated/product_performance.sql
+      transform/curated/sales_summary.sql
+  - Staging Views & CDC Streams:
+      transform/raw/sales/
+      transform/raw/masterdata/
 
 Features:
-  - Incremental Load (default): Processes delta based on high watermark timestamps.
-  - Full Refresh (--full-refresh): Truncates target tables and reloads all records from scratch.
+  - 100% Single Source of Truth: No stored_procedures.sql file. Logic lives ONLY in transform/ files.
+  - Incremental Load (default): Evaluates watermark filter (> MAX target date) directly in pure DML.
+  - Full Refresh (--full-refresh): Truncates target table before executing the DML.
 
 Usage:
-  python scripts/snowflake_transforms.py --deploy               # Deploy all views, procs, streams, tasks
+  python scripts/snowflake_transforms.py --deploy               # Deploy staging views & CDC streams
   python scripts/snowflake_transforms.py --stage all            # Execute all transformations (incremental)
-  python scripts/snowflake_transforms.py --stage all --full-refresh # Full refresh
+  python scripts/snowflake_transforms.py --stage all --full-refresh # Full refresh (truncate & reload)
   python scripts/snowflake_transforms.py --stage canonical      # Execute canonical stage only
   python scripts/snowflake_transforms.py --stage curated        # Execute curated stage only
-  python scripts/snowflake_transforms.py --dry-run              # Preview SQL / calls without executing
+  python scripts/snowflake_transforms.py --dry-run              # Preview SQL statements without executing
 """
 
 import argparse
@@ -74,31 +82,18 @@ def format_sql(raw_sql: str, cfg: dict) -> str:
 
 
 def extract_statements(sql_text: str) -> List[str]:
-    """Split SQL file into executable statements handling stored procedure $$ blocks and comments."""
-    statements = []
-    proc_pattern = re.compile(r'(CREATE OR REPLACE PROCEDURE\s+[\s\S]*?\$\$;)', re.IGNORECASE)
-    procs = []
-
-    def repl(m):
-        procs.append(m.group(1))
-        return f"__PROC_PLACEHOLDER_{len(procs)-1}__;"
-
-    masked = proc_pattern.sub(repl, sql_text)
-
-    raw_stmts = [s.strip() for s in masked.split(";") if s.strip()]
+    """Split SQL file into executable statements handling comments and semicolons."""
+    raw_stmts = [s.strip() for s in sql_text.split(";") if s.strip()]
+    clean_stmts = []
     for s in raw_stmts:
-        m = re.search(r"__PROC_PLACEHOLDER_(\d+)__", s)
-        if m:
-            statements.append(procs[int(m.group(1))])
-        else:
-            lines = [l for l in s.split("\n") if not l.strip().startswith("--") and l.strip()]
-            if lines:
-                statements.append("\n".join(lines))
-    return statements
+        lines = [l for l in s.split("\n") if not l.strip().startswith("--") and l.strip()]
+        if lines:
+            clean_stmts.append("\n".join(lines))
+    return clean_stmts
 
 
 def execute_sql_file(cur, file_path: Path, cfg: dict, dry_run: bool = False) -> None:
-    """Read, format, and execute statements from a SQL file."""
+    """Read, format, and execute DDL statements (views, streams) from a SQL file."""
     if not file_path.exists():
         logging.warning(f"File not found: {file_path}")
         return
@@ -122,114 +117,100 @@ def execute_sql_file(cur, file_path: Path, cfg: dict, dry_run: bool = False) -> 
 
 
 # ==========================================================
-# Model Specifications for Dynamic Stored Procedure Builder
-# (Pure DML in model files is the Single Source of Truth)
+# Model Specifications: Direct Single Source of Truth
 # ==========================================================
-MODEL_SPECS = [
-    # Canonical Layer Models
+CANONICAL_MODELS = [
     {
+        "table": "CONTRACT_DIM",
         "file": TRANSFORM_DIR / "canonical" / "masterdata" / "contract_dim.sql",
         "schema_key": "schema_canonical",
-        "table": "CONTRACT_DIM",
-        "proc_name": "SP_LOAD_CONTRACT_DIM",
     },
     {
+        "table": "CUSTOMER_DIM",
         "file": TRANSFORM_DIR / "canonical" / "masterdata" / "customer_dim.sql",
         "schema_key": "schema_canonical",
-        "table": "CUSTOMER_DIM",
-        "proc_name": "SP_LOAD_CUSTOMER_DIM",
     },
     {
+        "table": "PRODUCT_DIM",
         "file": TRANSFORM_DIR / "canonical" / "masterdata" / "product_dim.sql",
         "schema_key": "schema_canonical",
-        "table": "PRODUCT_DIM",
-        "proc_name": "SP_LOAD_PRODUCT_DIM",
     },
     {
+        "table": "SALES_FACT",
         "file": TRANSFORM_DIR / "canonical" / "sales" / "sales_fact.sql",
         "schema_key": "schema_canonical",
-        "table": "SALES_FACT",
-        "proc_name": "SP_LOAD_SALES_FACT",
     },
-    # Curated Layer Models
+]
+
+CURATED_MODELS = [
     {
+        "table": "CUSTOMER_ANALYTICS",
         "file": TRANSFORM_DIR / "curated" / "customer_analytics.sql",
         "schema_key": "schema_curated",
-        "table": "CUSTOMER_ANALYTICS",
-        "proc_name": "SP_LOAD_CUSTOMER_ANALYTICS",
     },
     {
+        "table": "PRODUCT_PERFORMANCE",
         "file": TRANSFORM_DIR / "curated" / "product_performance.sql",
         "schema_key": "schema_curated",
-        "table": "PRODUCT_PERFORMANCE",
-        "proc_name": "SP_LOAD_PRODUCT_PERFORMANCE",
     },
     {
+        "table": "SALES_SUMMARY",
         "file": TRANSFORM_DIR / "curated" / "sales_summary.sql",
         "schema_key": "schema_curated",
-        "table": "SALES_SUMMARY",
-        "proc_name": "SP_LOAD_SALES_SUMMARY",
     },
 ]
 
 
-def build_model_procedure_sql(spec: dict, cfg: dict) -> str:
-    """Dynamically generate a Snowflake Stored Procedure from a pure DML model file."""
+def execute_model(cur, model_spec: dict, cfg: dict, full_refresh: bool = False, dry_run: bool = False) -> str:
+    """Read and execute a transformation model SQL file directly against Snowflake."""
     snow_cfg = cfg["snowflake"]
     db = snow_cfg["database"]
-    schema = snow_cfg[spec["schema_key"]]
-    table = spec["table"]
-    proc_name = spec["proc_name"]
-    file_path = spec["file"]
+    schema = snow_cfg[model_spec["schema_key"]]
+    table = model_spec["table"]
+    file_path = model_spec["file"]
 
     if not file_path.exists():
         raise FileNotFoundError(f"Model file not found: {file_path}")
 
+    rel_path = file_path.relative_to(PROJECT_ROOT)
+    logging.info(f"📄 Running model: {table} ({rel_path})...")
+
+    # If full refresh requested, truncate target table first
+    if full_refresh:
+        truncate_sql = f"TRUNCATE TABLE {db}.{schema}.{table};"
+        if dry_run:
+            logging.info(f"[DRY-RUN] {truncate_sql}")
+        else:
+            logging.info(f"🧹 Truncating target table: {db}.{schema}.{table}...")
+            cur.execute(truncate_sql)
+            logging.info(f"✅ Truncated: {db}.{schema}.{table}")
+
     with open(file_path, "r", encoding="utf-8") as f:
-        raw_dml = f.read()
+        raw_sql = f.read()
 
-    # Strip header comment block
-    lines = []
-    in_header = True
-    for line in raw_dml.split("\n"):
-        if in_header and (line.strip().startswith("--") or not line.strip()):
-            continue
-        in_header = False
-        lines.append(line)
-    pure_dml = "\n".join(lines).strip()
-    if pure_dml.endswith(";"):
-        pure_dml = pure_dml[:-1].strip()
+    formatted_sql = format_sql(raw_sql, cfg)
+    stmts = extract_statements(formatted_sql)
 
-    formatted_dml = format_sql(pure_dml, cfg)
-    indented_dml = "\n".join(f"    {l}" if l.strip() else "" for l in formatted_dml.split("\n"))
+    rows_affected = 0
+    for stmt in stmts:
+        summary_line = stmt.strip().split("\n")[0][:80]
+        if dry_run:
+            logging.info(f"[DRY-RUN]\n{stmt}\n")
+        else:
+            logging.info(f"⏳ Executing DML: {summary_line}...")
+            cur.execute(stmt)
+            if cur.rowcount and cur.rowcount > 0:
+                rows_affected += cur.rowcount
+            logging.info(f"✅ Executed DML for {table}")
 
-    proc_sql = f"""CREATE OR REPLACE PROCEDURE {db}.{schema}.{proc_name}(is_full_refresh BOOLEAN DEFAULT FALSE)
-RETURNS VARCHAR
-LANGUAGE SQL
-EXECUTE AS CALLER
-AS
-$$
-DECLARE
-    rows_affected INTEGER DEFAULT 0;
-BEGIN
-    IF (is_full_refresh) THEN
-        TRUNCATE TABLE {db}.{schema}.{table};
-    END IF;
-
-{indented_dml};
-    rows_affected := SQLROWCOUNT;
-    RETURN 'SUCCESS: {table} loaded (Full refresh: ' || :is_full_refresh || '). Rows affected: ' || rows_affected;
-END;
-$$;"""
-    return proc_sql
+    return f"SUCCESS: {table} loaded (Full refresh: {full_refresh}). Rows affected: {rows_affected}"
 
 
 def deploy_all(cur, cfg: dict, dry_run: bool = False) -> None:
-    """Deploy all transformation views, dynamically built procedures, streams, and tasks."""
+    """Deploy transformation views and CDC streams directly from transform/."""
     logging.info("🚀 Deploying Snowflake Native Transformation Objects from transform/...")
 
-    # Step 1: Deploy Views & Streams
-    pre_deploy_files = [
+    deploy_order = [
         # Stage 1: Raw / Staging views
         TRANSFORM_DIR / "raw" / "sales" / "stg_direct_sales.sql",
         TRANSFORM_DIR / "raw" / "sales" / "stg_indirect_sales.sql",
@@ -240,98 +221,59 @@ def deploy_all(cur, cfg: dict, dry_run: bool = False) -> None:
         TRANSFORM_DIR / "canonical" / "sales" / "sales_fact_direct.sql",
         TRANSFORM_DIR / "canonical" / "sales" / "sales_fact_indirect.sql",
     ]
-    for sql_file in pre_deploy_files:
+
+    for sql_file in deploy_order:
         execute_sql_file(cur, sql_file, cfg, dry_run=dry_run)
 
-    # Step 2: Dynamically build and deploy stored procedures directly from pure SQL model files
-    logging.info("⚙️  Dynamically building & deploying model stored procedures from pure SQL models...")
-    for spec in MODEL_SPECS:
-        proc_sql = build_model_procedure_sql(spec, cfg)
-        rel_path = spec["file"].relative_to(PROJECT_ROOT)
-        summary_line = f"CREATE OR REPLACE PROCEDURE {spec['proc_name']} (from {rel_path})"
-        if dry_run:
-            logging.info(f"[DRY-RUN]\n{proc_sql}\n")
-        else:
-            logging.info(f"⏳ Executing: {summary_line}...")
-            cur.execute(proc_sql)
-            logging.info(f"✅ Executed: {summary_line}")
-
-    # Step 3: Deploy master orchestrators and tasks
-    post_deploy_files = [
-        TRANSFORM_DIR / "orchestration" / "stored_procedures.sql",
-        TRANSFORM_DIR / "orchestration" / "tasks.sql",
-    ]
-    for sql_file in post_deploy_files:
-        execute_sql_file(cur, sql_file, cfg, dry_run=dry_run)
-
-    logging.info("✅ All Snowflake Native transformation objects successfully deployed (Zero duplicate SQL!).")
+    logging.info("✅ All Snowflake Native transformation objects successfully deployed (Direct file execution mode).")
 
 
 def run_canonical(cur, cfg: dict, full_refresh: bool = False, dry_run: bool = False) -> str:
-    """Execute canonical layer transformations (SCD2 Dimensions & Sales Fact)."""
+    """Execute canonical layer transformations directly from transform/canonical/ files."""
     logging.info(f"🔄 Running Stage 2: Canonical Transformations (full_refresh={full_refresh})...")
-    snow_cfg = cfg["snowflake"]
-    db = snow_cfg["database"]
-    canonical_schema = snow_cfg["schema_canonical"]
-
-    fr_param = "TRUE" if full_refresh else "FALSE"
-    call_sql = f"CALL {db}.{canonical_schema}.SP_LOAD_CANONICAL({fr_param});"
-    if dry_run:
-        logging.info(f"[DRY-RUN] {call_sql}")
-        return "[DRY-RUN] Canonical load previewed."
-
-    cur.execute(call_sql)
-    res = cur.fetchone()[0]
-    logging.info(f"✅ Canonical Load Result:\n{res}")
-    return res
+    results = []
+    for model in CANONICAL_MODELS:
+        res = execute_model(cur, model, cfg, full_refresh=full_refresh, dry_run=dry_run)
+        results.append(res)
+    summary = "\n".join(results)
+    logging.info(f"✅ Canonical Stage Complete:\n{summary}")
+    return summary
 
 
 def run_curated(cur, cfg: dict, full_refresh: bool = False, dry_run: bool = False) -> str:
-    """Execute curated layer transformations (Customer Analytics, Product Perf, Sales Summary)."""
+    """Execute curated layer transformations directly from transform/curated/ files."""
     logging.info(f"🔄 Running Stage 3: Curated Transformations (full_refresh={full_refresh})...")
-    snow_cfg = cfg["snowflake"]
-    db = snow_cfg["database"]
-    curated_schema = snow_cfg["schema_curated"]
-
-    fr_param = "TRUE" if full_refresh else "FALSE"
-    call_sql = f"CALL {db}.{curated_schema}.SP_LOAD_CURATED({fr_param});"
-    if dry_run:
-        logging.info(f"[DRY-RUN] {call_sql}")
-        return "[DRY-RUN] Curated load previewed."
-
-    cur.execute(call_sql)
-    res = cur.fetchone()[0]
-    logging.info(f"✅ Curated Load Result:\n{res}")
-    return res
+    results = []
+    for model in CURATED_MODELS:
+        res = execute_model(cur, model, cfg, full_refresh=full_refresh, dry_run=dry_run)
+        results.append(res)
+    summary = "\n".join(results)
+    logging.info(f"✅ Curated Stage Complete:\n{summary}")
+    return summary
 
 
 def run_full_pipeline(cur, cfg: dict, full_refresh: bool = False, dry_run: bool = False) -> str:
-    """Execute full transformation pipeline (Canonical + Curated)."""
+    """Execute full transformation pipeline directly from transform/ files."""
     logging.info(f"🚀 Running Complete Transformation Pipeline (full_refresh={full_refresh})...")
-    snow_cfg = cfg["snowflake"]
-    db = snow_cfg["database"]
-    canonical_schema = snow_cfg["schema_canonical"]
-
-    fr_param = "TRUE" if full_refresh else "FALSE"
-    call_sql = f"CALL {db}.{canonical_schema}.SP_RUN_FULL_TRANSFORMATION({fr_param});"
-    if dry_run:
-        logging.info(f"[DRY-RUN] {call_sql}")
-        return "[DRY-RUN] Full transformation previewed."
-
-    cur.execute(call_sql)
-    res = cur.fetchone()[0]
-    logging.info(f"✅ Full Transformation Pipeline Result:\n{res}")
-    return res
+    res_canonical = run_canonical(cur, cfg, full_refresh=full_refresh, dry_run=dry_run)
+    res_curated = run_curated(cur, cfg, full_refresh=full_refresh, dry_run=dry_run)
+    summary = (
+        f"=== FULL TRANSFORMATION PIPELINE COMPLETE (Full refresh: {full_refresh}) ===\n\n"
+        f"[CANONICAL STAGE]\n{res_canonical}\n\n"
+        f"[CURATED STAGE]\n{res_curated}"
+    )
+    logging.info(f"🏁 Pipeline Finished:\n{summary}")
+    return summary
 
 
 def main() -> int:
     parser = argparse.ArgumentParser(
-        description="Snowflake Native Data Transformation Engine (organized under transform/)."
+        description="Snowflake Native Data Transformation Engine (Direct Transform File Execution)."
     )
     parser.add_argument(
         "--deploy",
         action="store_true",
-        help="Deploy Snowflake transformation objects from transform/ (Views, Procedures, Streams, Tasks).",
+        help="Deploy Snowflake transformation views and streams directly from transform/.",
     )
     parser.add_argument(
         "--stage",

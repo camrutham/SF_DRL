@@ -64,21 +64,21 @@ flowchart TD
 
 The project maintains an exact 1:1 alignment between table DDL schemas and transformation SQL files across stages and submodules:
 
-| Layer / Stage | Submodule | Schema Definition (DDL) | Transformation SQL (Logic + Proc) | Target Snowflake Object |
+| Layer / Stage | Submodule | Schema Definition (DDL) | Transformation SQL (Single Source of Truth) | Target Snowflake Object |
 | :--- | :--- | :--- | :--- | :--- |
-| **Raw** | `masterdata` | `schema/raw/masterdata/contract_raw.yaml` | `transform/raw/masterdata/streams.sql` | `sales_raw.CONTRACT_RAW` & Stream |
-| | `masterdata` | `schema/raw/masterdata/customer_raw.yaml` | `transform/raw/masterdata/streams.sql` | `sales_raw.CUSTOMER_RAW` & Stream |
-| | `masterdata` | `schema/raw/masterdata/product_raw.yaml` | `transform/raw/masterdata/streams.sql` | `sales_raw.PRODUCT_RAW` & Stream |
+| **Raw** | `masterdata` | `schema/raw/masterdata/contract_raw.yaml` | `transform/raw/masterdata/streams.sql` | `sales_raw.CONTRACT_RAW` & CDC Stream |
+| | `masterdata` | `schema/raw/masterdata/customer_raw.yaml` | `transform/raw/masterdata/streams.sql` | `sales_raw.CUSTOMER_RAW` & CDC Stream |
+| | `masterdata` | `schema/raw/masterdata/product_raw.yaml` | `transform/raw/masterdata/streams.sql` | `sales_raw.PRODUCT_RAW` & CDC Stream |
 | | `sales` | `schema/raw/sales/direct_sale_lines_raw.yaml` | `transform/raw/sales/stg_direct_sales.sql`<br>`transform/raw/sales/streams.sql` | `sales_raw.DIRECT_SALE_LINES_RAW`<br>`sales_raw.STG_DIRECT_SALES` (View) |
 | | `sales` | `schema/raw/sales/indirect_sale_lines_raw.yaml` | `transform/raw/sales/stg_indirect_sales.sql`<br>`transform/raw/sales/streams.sql` | `sales_raw.INDIRECT_SALE_LINES_RAW`<br>`sales_raw.STG_INDIRECT_SALES` (View) |
-| **Canonical** | `masterdata` | `schema/canonical/masterdata/contract.yaml` | `transform/canonical/masterdata/contract_dim.sql` | `sales_canonical.CONTRACT_DIM`<br>`SP_LOAD_CONTRACT_DIM()` |
-| | `masterdata` | `schema/canonical/masterdata/customer_dim.yaml` | `transform/canonical/masterdata/customer_dim.sql` | `sales_canonical.CUSTOMER_DIM`<br>`SP_LOAD_CUSTOMER_DIM()` |
-| | `masterdata` | `schema/canonical/masterdata/product_dim.yaml` | `transform/canonical/masterdata/product_dim.sql` | `sales_canonical.PRODUCT_DIM`<br>`SP_LOAD_PRODUCT_DIM()` |
-| | `sales` | `schema/canonical/sales/sales_fact.yaml` | `transform/canonical/sales/sales_fact.sql`<br>`transform/canonical/sales/sales_fact_direct.sql`<br>`transform/canonical/sales/sales_fact_indirect.sql` | `sales_canonical.SALES_FACT`<br>`SP_LOAD_SALES_FACT()`<br>Projections: `SALES_FACT_DIRECT`, `SALES_FACT_INDIRECT` |
-| **Curated** | *(root)* | `schema/curated/customer_analytics.yaml` | `transform/curated/customer_analytics.sql` | `sales_curated.CUSTOMER_ANALYTICS`<br>`SP_LOAD_CUSTOMER_ANALYTICS()` |
-| | *(root)* | `schema/curated/product_performance.yaml` | `transform/curated/product_performance.sql` | `sales_curated.PRODUCT_PERFORMANCE`<br>`SP_LOAD_PRODUCT_PERFORMANCE()` |
-| | *(root)* | `schema/curated/sales_summary.yaml` | `transform/curated/sales_summary.sql` | `sales_curated.SALES_SUMMARY`<br>`SP_LOAD_SALES_SUMMARY()` |
-| **Orchestration** | *(root)* | N/A | `transform/orchestration/stored_procedures.sql`<br>`transform/orchestration/tasks.sql`<br>`transform/orchestration/dynamic_tables.sql` | `SP_LOAD_CANONICAL()`<br>`SP_LOAD_CURATED()`<br>`SP_RUN_FULL_TRANSFORMATION()`<br>Task DAG (`TSK_LOAD_CANONICAL` → `TSK_LOAD_CURATED`) |
+| **Canonical** | `masterdata` | `schema/canonical/masterdata/contract.yaml` | `transform/canonical/masterdata/contract_dim.sql` | `sales_canonical.CONTRACT_DIM` |
+| | `masterdata` | `schema/canonical/masterdata/customer_dim.yaml` | `transform/canonical/masterdata/customer_dim.sql` | `sales_canonical.CUSTOMER_DIM` |
+| | `masterdata` | `schema/canonical/masterdata/product_dim.yaml` | `transform/canonical/masterdata/product_dim.sql` | `sales_canonical.PRODUCT_DIM` |
+| | `sales` | `schema/canonical/sales/sales_fact.yaml` | `transform/canonical/sales/sales_fact.sql`<br>`transform/canonical/sales/sales_fact_direct.sql`<br>`transform/canonical/sales/sales_fact_indirect.sql` | `sales_canonical.SALES_FACT`<br>Projections: `SALES_FACT_DIRECT`, `SALES_FACT_INDIRECT` |
+| **Curated** | *(root)* | `schema/curated/customer_analytics.yaml` | `transform/curated/customer_analytics.sql` | `sales_curated.CUSTOMER_ANALYTICS` |
+| | *(root)* | `schema/curated/product_performance.yaml` | `transform/curated/product_performance.sql` | `sales_curated.PRODUCT_PERFORMANCE` |
+| | *(root)* | `schema/curated/sales_summary.yaml` | `transform/curated/sales_summary.sql` | `sales_curated.SALES_SUMMARY` |
+| **Orchestration** | *(root)* | N/A | `transform/orchestration/dynamic_tables.sql` | Declarative Dynamic Tables alternative |
 
 ---
 
@@ -109,14 +109,12 @@ SF_DRL/
 │   │   ├── customer_analytics.sql
 │   │   ├── product_performance.sql
 │   │   └── sales_summary.sql
-│   └── orchestration/                  # Master procedures, tasks, dynamic tables
-│       ├── stored_procedures.sql       # SP_LOAD_CANONICAL, SP_LOAD_CURATED, SP_RUN_FULL_TRANSFORMATION
-│       ├── tasks.sql                   # Snowflake Task DAG
+│   └── orchestration/                  # Declarative dynamic tables option
 │       └── dynamic_tables.sql          # Declarative Dynamic Tables alternative
 ├── scripts/
 │   ├── schema_orchestrator.py          # Complete environment orchestrator
-│   ├── snowflake_transforms.py         # Standalone Native Transformation Engine & Deployer
-│   ├── copy_and_load.py                # Unified Copy Load + Native Transformation Pipeline
+│   ├── snowflake_transforms.py         # Direct Native Transformation Engine & View Deployer
+│   ├── copy_and_load.py                # Unified Copy Load + Direct Native Transformation Pipeline
 │   ├── ingest_data.py                  # Pipeline runner (raw -> canonical -> curated)
 │   ├── copy_data.py                    # Stage & Raw copy load logic
 │   ├── ddl_generator.py                # YAML to DDL SQL generator
@@ -131,17 +129,20 @@ SF_DRL/
 ## Quickstart & Usage
 
 ### 1. Deploy the Complete Infrastructure & Native Objects
-Runs database creation, schemas, external stages, tables from YAML, staging views, stored procedures, CDC streams, and tasks:
+Runs database creation, schemas, external stages, tables from YAML, staging views, and CDC streams:
 ```bash
 python scripts/schema_orchestrator.py
 ```
 *(To preview without executing: `python scripts/schema_orchestrator.py --dry-run`)*
 
 ### 2. Run the Full Ingestion & Transformation Pipeline
-Executes `COPY INTO` from S3 into raw tables, then triggers canonical and curated transformations via native Snowflake stored procedures:
+Executes `COPY INTO` from S3 into raw tables, then executes canonical and curated transformations directly from the SQL files:
 ```bash
 # Run full pipeline (Raw COPY load + Canonical + Curated):
 python scripts/copy_and_load.py
+
+# With full refresh (truncate targets & reload):
+python scripts/copy_and_load.py --full-refresh
 
 # Or via ingest_data.py:
 python scripts/ingest_data.py
@@ -155,22 +156,16 @@ python scripts/copy_and_load.py --stage raw
 
 ### 3. Standalone Transformation Management
 ```bash
-# Deploy/update views, procedures, streams, and tasks in Snowflake:
+# Deploy/update views and CDC streams in Snowflake:
 python scripts/snowflake_transforms.py --deploy
 
-# Execute all transformations directly:
+# Execute all transformations directly (incremental):
 python scripts/snowflake_transforms.py --stage all
-```
 
-### 4. Triggering Directly Inside Snowflake / Snowsight
-```sql
--- Run the entire transformation pipeline in one call:
-CALL sales.sales_canonical.SP_RUN_FULL_TRANSFORMATION();
+# Execute all transformations with full refresh (truncate & reload):
+python scripts/snowflake_transforms.py --stage all --full-refresh
 
--- Or run individual stages:
-CALL sales.sales_canonical.SP_LOAD_CANONICAL();
-CALL sales.sales_curated.SP_LOAD_CURATED();
-
--- Trigger the automated Task DAG on demand:
-EXECUTE TASK sales.sales_canonical.TSK_RUN_FULL_PIPELINE;
+# Execute a specific stage:
+python scripts/snowflake_transforms.py --stage canonical
+python scripts/snowflake_transforms.py --stage curated
 ```

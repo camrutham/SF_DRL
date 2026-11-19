@@ -249,8 +249,8 @@ def create_tables(cur, snowflake_cfg: dict, schema_dir: Path, dry_run: bool = Fa
 # 4. Setup Native Transformation Objects (replaces dbt)
 # ==========================================================
 def setup_transforms(cur, cfg: dict, dry_run: bool = False):
-    """Deploy Staging Views, Stored Procedures, CDC Streams, and Tasks."""
-    print("\n--- 4. Setting up Snowflake Native Transformation Objects (replacing dbt) ---")
+    """Deploy Staging Views and CDC Streams."""
+    print("\n--- 4. Setting up Snowflake Native Transformation Objects (Views & Streams) ---")
     deploy_all(cur, cfg, dry_run=dry_run)
 
 
@@ -262,7 +262,7 @@ def main():
         description="Orchestrate Snowflake database, schema, external objects, tables, and native transformation pipeline."
     )
     parser.add_argument("--dry-run", action="store_true", help="Print generated SQL without executing")
-    parser.add_argument("--transforms-only", action="store_true", help="Deploy transformation objects only (Views, Procs, Tasks)")
+    parser.add_argument("--transforms-only", action="store_true", help="Deploy transformation objects only (Views, Streams)")
     parser.add_argument("--skip-transforms", action="store_true", help="Skip deployment of transformation objects")
     args = parser.parse_args()
 

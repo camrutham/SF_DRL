@@ -18,7 +18,7 @@
   "transforms": {
     "transform_dir": "transform",
     "task_schedule": "60 MINUTE",
-    "use_stored_procedures": true,
+    "use_stored_procedures": false,
     "enable_cdc_streams": true
   },
   "directories": {
