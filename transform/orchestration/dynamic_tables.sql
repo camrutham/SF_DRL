@@ -12,7 +12,7 @@ AS
 WITH combined_sales AS (
     SELECT
         s.SALE_LINE_ID AS SRC_SYS_ID,
-        CAST(s.SALE_LINE_ID AS VARCHAR) AS SALE_LINE_ID,
+        s.SALE_LINE_ID::VARCHAR AS SALE_LINE_ID,
         s.CUSTOMER_ID,
         s.PRODUCT_ID,
         s.CONTRACT_ID,
@@ -40,7 +40,7 @@ WITH combined_sales AS (
 
     SELECT
         s.SALE_LINE_ID AS SRC_SYS_ID,
-        CAST(s.SALE_LINE_ID AS VARCHAR) AS SALE_LINE_ID,
+        s.SALE_LINE_ID::VARCHAR AS SALE_LINE_ID,
         s.CUSTOMER_ID,
         s.PRODUCT_ID,
         s.CONTRACT_ID,
