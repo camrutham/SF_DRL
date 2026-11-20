@@ -97,6 +97,7 @@ columns:
 primary_key:
   columns:
     - SRC_SYS_ID
+    - EFFECTIVE_START_DATE
 
 clustering_keys:
   - SRC_SYS_ID
