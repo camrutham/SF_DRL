@@ -34,7 +34,8 @@
     "templates": {
       "file_formats": "file_formats.csv",
       "storage_integrations": "storage_integrations.csv",
-      "stages": "stages.csv"
+      "stages": "stages.csv",
+      "stream_mappings": "stream_mappings.csv"
     }
   },
   "sql": {

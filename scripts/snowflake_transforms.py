@@ -38,6 +38,7 @@ Usage:
 """
 
 import argparse
+import csv
 import logging
 import re
 import sys
@@ -48,6 +49,7 @@ from typing import List, Optional
 SCRIPT_DIR = Path(__file__).resolve().parent
 PROJECT_ROOT = SCRIPT_DIR.parent
 TRANSFORM_DIR = PROJECT_ROOT / "transform"
+TEMPLATES_DIR = PROJECT_ROOT / "templates"
 LOG_DIR = PROJECT_ROOT / "logs"
 
 from snowflake_utils import connect_snowflake, get_config
@@ -87,29 +89,45 @@ def format_sql(raw_sql: str, cfg: dict) -> str:
     )
 
 
-def transform_sql_for_full_refresh(sql_text: str) -> str:
+def load_stream_mappings(cfg: dict = None) -> List[dict]:
+    """Load stream to base table mappings from templates/stream_mappings.csv."""
+    mapping_file = TEMPLATES_DIR / "stream_mappings.csv"
+    if not mapping_file.exists():
+        logging.warning(f"⚠️ Stream mapping template not found: {mapping_file}")
+        return []
+
+    mappings = []
+    with open(mapping_file, "r", encoding="utf-8") as f:
+        reader = csv.DictReader(f)
+        for row in reader:
+            if row.get("stream_name") and row.get("base_table_name"):
+                mappings.append(row)
+    return mappings
+
+
+def transform_sql_for_full_refresh(sql_text: str, stream_mappings: List[dict] = None) -> str:
     """
     Transform stream-based CDC SQL into full-refresh SQL against base tables.
-    Replaces stream references with base tables and removes stream metadata filters.
+    Dynamically swaps stream names to base table names using templates/stream_mappings.csv.
     """
-    # 1. Masterdata raw streams -> raw tables
-    sql = sql_text.replace("CONTRACT_RAW_STREAM", "CONTRACT_RAW")
-    sql = sql.replace("CUSTOMER_RAW_STREAM", "CUSTOMER_RAW")
-    sql = sql.replace("PRODUCT_RAW_STREAM", "PRODUCT_RAW")
+    if stream_mappings is None:
+        stream_mappings = load_stream_mappings()
 
-    # 2. Sales raw streams -> raw tables
-    sql = sql.replace("DIRECT_SALE_LINES_RAW_STREAM", "DIRECT_SALE_LINES_RAW")
-    sql = sql.replace("INDIRECT_SALE_LINES_RAW_STREAM", "INDIRECT_SALE_LINES_RAW")
+    sql = sql_text
 
-    # 3. Canonical streams -> canonical tables
-    sql = sql.replace("CUSTOMER_DIM_STREAM", "CUSTOMER_DIM")
-    sql = sql.replace("PRODUCT_DIM_STREAM", "PRODUCT_DIM")
-    sql = sql.replace("SALES_FACT_STREAM_SUMMARY", "SALES_FACT")
-    sql = sql.replace("SALES_FACT_STREAM_CUSTOMER", "SALES_FACT")
-    sql = sql.replace("SALES_FACT_STREAM_PRODUCT", "SALES_FACT")
+    # 1. Dynamically swap stream names to base table names from template CSV
+    for mapping in stream_mappings:
+        stream_name = mapping["stream_name"].strip()
+        base_table = mapping["base_table_name"].strip()
+        sql = sql.replace(stream_name, base_table)
 
-    # 4. Remove METADATA$ACTION filters
-    sql = re.sub(r"WHERE\s+([a-zA-Z0-9_]+\.)?METADATA\$ACTION\s*=\s*'INSERT'", "WHERE 1=1", sql, flags=re.IGNORECASE)
+    # 2. Swap the stream filter (METADATA$ACTION = 'INSERT') to a no-op (WHERE 1=1)
+    sql = re.sub(
+        r"WHERE\s+([a-zA-Z0-9_]+\.)?METADATA\$ACTION\s*=\s*'INSERT'",
+        "WHERE 1=1",
+        sql,
+        flags=re.IGNORECASE,
+    )
 
     return sql
 

@@ -1,0 +1,11 @@
+stream_name,base_table_name,schema_layer,description
+CONTRACT_RAW_STREAM,CONTRACT_RAW,raw,CDC stream tracking contract raw changes
+CUSTOMER_RAW_STREAM,CUSTOMER_RAW,raw,CDC stream tracking customer raw changes
+PRODUCT_RAW_STREAM,PRODUCT_RAW,raw,CDC stream tracking product raw changes
+DIRECT_SALE_LINES_RAW_STREAM,DIRECT_SALE_LINES_RAW,raw,CDC stream tracking direct sales raw changes
+INDIRECT_SALE_LINES_RAW_STREAM,INDIRECT_SALE_LINES_RAW,raw,CDC stream tracking indirect sales raw changes
+CUSTOMER_DIM_STREAM,CUSTOMER_DIM,canonical,CDC stream tracking customer dim changes for curated
+PRODUCT_DIM_STREAM,PRODUCT_DIM,canonical,CDC stream tracking product dim changes for curated
+SALES_FACT_STREAM_SUMMARY,SALES_FACT,canonical,CDC stream tracking sales fact changes for daily summary rollup
+SALES_FACT_STREAM_CUSTOMER,SALES_FACT,canonical,CDC stream tracking sales fact changes for customer analytics
+SALES_FACT_STREAM_PRODUCT,SALES_FACT,canonical,CDC stream tracking sales fact changes for product performance
