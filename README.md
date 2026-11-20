@@ -108,8 +108,22 @@ SF_DRL/
 │   ├── snowflake_utils.py              # Snowflake connector & query helpers
 │   ├── config.json                     # Unified configuration
 │   └── copy_data_manifest.json         # S3 landing to raw table mappings
-└── templates/                          # Configuration templates: file_formats.csv, stages.csv, stream_mappings.csv, models.csv, deploy_manifest.csv
+└── templates/                          # Configuration templates: file_formats.csv, stages.csv, stream_mappings.csv, deploy_manifest.csv
 ```
+
+---
+
+## Zero-Configuration Model Auto-Discovery
+
+The transformation orchestrator (`scripts/snowflake_transforms.py`) dynamically discovers models directly from the filesystem hierarchy under `transform/`:
+
+- **Stage & Schema Layer:** Decoded automatically from the directory (`transform/canonical/...` → `sales_canonical`, `transform/curated/...` → `sales_curated`).
+- **Target Table Name:** Decoded from the SQL file stem (e.g. `contract_dim.sql` → `CONTRACT_DIM`).
+- **Referenced CDC Streams:** Automatically parsed from the SQL query text by matching against `templates/stream_mappings.csv`.
+- **Execution Order:** Dimension models (`_dim.sql` / `masterdata/`) run first, followed by fact models (`_fact.sql` / `sales/`), followed by curated rollups (`curated/`).
+- **Full Refresh Handling:** Automatically swaps stream references to base tables and resets stream offsets post-load.
+
+> **Adding a New Model:** Simply create your `.sql` file under `transform/canonical/` or `transform/curated/`. No Python code edits or model registration CSVs required.
 
 ---
 

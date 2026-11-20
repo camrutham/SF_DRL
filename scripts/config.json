@@ -36,7 +36,6 @@
       "storage_integrations": "storage_integrations.csv",
       "stages": "stages.csv",
       "stream_mappings": "stream_mappings.csv",
-      "models": "models.csv",
       "deploy_manifest": "deploy_manifest.csv"
     }
   },

@@ -168,13 +168,36 @@ def execute_sql_file(cur, file_path: Path, cfg: dict, dry_run: bool = False) -> 
 
 
 # ==========================================================
-# Dynamic Template-Driven Model Specifications
-# Source of truth: templates/models.csv & templates/stream_mappings.csv
+# Deployment Manifest & Filesystem Model Auto-Discovery
+# Decodes models, stages, schemas, tables, and CDC streams
+# directly from transform/ directory hierarchy and SQL files
 # ==========================================================
-def load_models(stage: Optional[str] = None, cfg: dict = None) -> List[dict]:
+def load_deploy_manifest() -> List[Path]:
+    """Load deployment file paths dynamically from templates/deploy_manifest.csv."""
+    manifest_file = TEMPLATES_DIR / "deploy_manifest.csv"
+    if not manifest_file.exists():
+        logging.warning(f"⚠️ Deploy manifest template not found: {manifest_file}")
+        return []
+
+    entries = []
+    with open(manifest_file, "r", encoding="utf-8") as f:
+        reader = csv.DictReader(f)
+        for row in reader:
+            if row.get("file_path"):
+                step = int(row.get("step", 999))
+                entries.append((step, (PROJECT_ROOT / row["file_path"].strip()).resolve()))
+    entries.sort(key=lambda x: x[0])
+    return [e[1] for e in entries]
+
+
+def discover_models(stage: Optional[str] = None, cfg: dict = None) -> List[dict]:
     """
-    Load model specifications dynamically from templates/models.csv.
-    Resolves streams and generates reset SQL from templates/stream_mappings.csv.
+    Auto-discover transformation models dynamically from the transform/ filesystem hierarchy.
+    - Decodes stage & target schema from directory structure (transform/canonical, transform/curated).
+    - Decodes target table name from the SQL filename stem (e.g., contract_dim.sql -> CONTRACT_DIM).
+    - Decodes associated CDC streams by scanning SQL text against templates/stream_mappings.csv.
+    - Generates stream reset DDL automatically for full refresh.
+    - Orders execution intelligently (dimensions before facts, canonical before curated).
     """
     if cfg is None:
         cfg = get_config()
@@ -182,57 +205,88 @@ def load_models(stage: Optional[str] = None, cfg: dict = None) -> List[dict]:
     db = snow_cfg["database"]
 
     stream_map = {m["stream_name"]: m for m in load_stream_mappings(cfg)}
+    deploy_files = {p.resolve() for p in load_deploy_manifest()}
 
-    models_file = TEMPLATES_DIR / "models.csv"
-    if not models_file.exists():
-        logging.warning(f"⚠️ Models template not found: {models_file}")
-        return []
-
+    stages_to_scan = [stage] if stage else ["canonical", "curated"]
     models = []
-    with open(models_file, "r", encoding="utf-8") as f:
-        reader = csv.DictReader(f)
-        for row in reader:
-            row_stage = row.get("stage", "").strip()
-            if stage and row_stage != stage:
+
+    for stg in stages_to_scan:
+        stg_dir = TRANSFORM_DIR / stg
+        if not stg_dir.exists():
+            continue
+
+        stg_models = []
+        for sql_file in stg_dir.rglob("*.sql"):
+            # Exclude infrastructure DDL files (streams, views in deploy_manifest, or named streams.sql)
+            if sql_file.resolve() in deploy_files:
+                continue
+            if sql_file.name.lower() in ("streams.sql", "create_streams.sql") or "streams" in [p.lower() for p in sql_file.parts]:
                 continue
 
-            raw_stream_names = [s.strip() for s in row.get("streams", "").split(";") if s.strip()]
+            table_name = sql_file.stem.upper()
+            schema_key = f"schema_{stg}"
+
+            # Read SQL content to discover referenced CDC streams
+            try:
+                content = sql_file.read_text(encoding="utf-8")
+            except Exception as e:
+                logging.warning(f"Could not read SQL file {sql_file}: {e}")
+                continue
+
             qualified_streams = []
             reset_sqls = []
 
-            for s_name in raw_stream_names:
-                m_info = stream_map.get(s_name)
-                if m_info:
+            for s_name, m_info in stream_map.items():
+                if re.search(rf"\b{re.escape(s_name)}\b", content, re.IGNORECASE):
                     layer = m_info.get("schema_layer", "raw")
-                    schema_key = f"schema_{layer}"
-                    schema_name = snow_cfg.get(schema_key, f"sales_{layer}")
+                    s_schema_name = snow_cfg.get(f"schema_{layer}", f"sales_{layer}")
                     base_table = m_info["base_table_name"]
                     desc = m_info.get("description", f"CDC stream on {base_table}")
 
-                    qualified_streams.append(f"{db}.{schema_name}.{s_name}")
+                    qualified_streams.append(f"{db}.{s_schema_name}.{s_name}")
                     reset_sqls.append(
-                        f"CREATE OR REPLACE STREAM {db}.{schema_name}.{s_name} "
-                        f"ON TABLE {db}.{schema_name}.{base_table} APPEND_ONLY = FALSE "
+                        f"CREATE OR REPLACE STREAM {db}.{s_schema_name}.{s_name} "
+                        f"ON TABLE {db}.{s_schema_name}.{base_table} APPEND_ONLY = FALSE "
                         f"COMMENT = '{desc}';"
                     )
-                else:
-                    qualified_streams.append(s_name)
 
-            models.append({
-                "table": row["table"].strip(),
-                "file": PROJECT_ROOT / row["file_path"].strip(),
-                "schema_key": row["schema_key"].strip(),
-                "stage": row_stage,
-                "streams": qualified_streams,
-                "reset_streams_sql": reset_sqls,
-            })
+            # Determine execution priority:
+            # For canonical: masterdata / _dim first (priority 1), facts second (priority 2), other (priority 3)
+            # For curated: priority 1
+            if stg == "canonical":
+                if "_dim" in sql_file.stem.lower() or "masterdata" in [p.lower() for p in sql_file.parts]:
+                    prio = 1
+                elif "_fact" in sql_file.stem.lower() or "sales" in [p.lower() for p in sql_file.parts]:
+                    prio = 2
+                else:
+                    prio = 3
+            else:
+                prio = 1
+
+            stg_models.append((
+                prio,
+                sql_file.name.lower(),
+                {
+                    "table": table_name,
+                    "file": sql_file,
+                    "schema_key": schema_key,
+                    "stage": stg,
+                    "streams": qualified_streams,
+                    "reset_streams_sql": reset_sqls,
+                }
+            ))
+
+        # Sort models within stage deterministically by priority then filename
+        stg_models.sort(key=lambda x: (x[0], x[1]))
+        models.extend([m[2] for m in stg_models])
 
     return models
 
 
-# Dynamic properties for backward compatibility
-CANONICAL_MODELS = load_models(stage="canonical")
-CURATED_MODELS = load_models(stage="curated")
+# Backward compatibility alias
+load_models = discover_models
+CANONICAL_MODELS = discover_models(stage="canonical")
+CURATED_MODELS = discover_models(stage="curated")
 
 
 def execute_model(cur, model_spec: dict, cfg: dict, full_refresh: bool = False, dry_run: bool = False) -> str:
@@ -319,24 +373,6 @@ def execute_model(cur, model_spec: dict, cfg: dict, full_refresh: bool = False, 
     return f"SUCCESS: {table} loaded (Full refresh: {full_refresh}). Rows affected: {rows_affected}"
 
 
-def load_deploy_manifest() -> List[Path]:
-    """Load deployment file paths dynamically from templates/deploy_manifest.csv."""
-    manifest_file = TEMPLATES_DIR / "deploy_manifest.csv"
-    if not manifest_file.exists():
-        logging.warning(f"⚠️ Deploy manifest template not found: {manifest_file}")
-        return []
-
-    entries = []
-    with open(manifest_file, "r", encoding="utf-8") as f:
-        reader = csv.DictReader(f)
-        for row in reader:
-            if row.get("file_path"):
-                step = int(row.get("step", 999))
-                entries.append((step, PROJECT_ROOT / row["file_path"].strip()))
-    entries.sort(key=lambda x: x[0])
-    return [e[1] for e in entries]
-
-
 def deploy_all(cur, cfg: dict, dry_run: bool = False) -> None:
     """Deploy transformation views and CDC streams dynamically from templates/deploy_manifest.csv."""
     logging.info("🚀 Deploying Snowflake Native Transformation Objects & CDC Streams...")
@@ -349,9 +385,9 @@ def deploy_all(cur, cfg: dict, dry_run: bool = False) -> None:
 
 
 def run_canonical(cur, cfg: dict, full_refresh: bool = False, dry_run: bool = False) -> str:
-    """Execute canonical layer transformations dynamically from templates/models.csv."""
+    """Execute canonical layer transformations auto-discovered from transform/canonical/."""
     logging.info(f"🔄 Running Stage 2: Canonical Transformations (full_refresh={full_refresh})...")
-    models = load_models(stage="canonical", cfg=cfg)
+    models = discover_models(stage="canonical", cfg=cfg)
     results = []
     for model in models:
         res = execute_model(cur, model, cfg, full_refresh=full_refresh, dry_run=dry_run)
@@ -362,9 +398,9 @@ def run_canonical(cur, cfg: dict, full_refresh: bool = False, dry_run: bool = Fa
 
 
 def run_curated(cur, cfg: dict, full_refresh: bool = False, dry_run: bool = False) -> str:
-    """Execute curated layer transformations dynamically from templates/models.csv."""
+    """Execute curated layer transformations auto-discovered from transform/curated/."""
     logging.info(f"🔄 Running Stage 3: Curated Transformations (full_refresh={full_refresh})...")
-    models = load_models(stage="curated", cfg=cfg)
+    models = discover_models(stage="curated", cfg=cfg)
     results = []
     for model in models:
         res = execute_model(cur, model, cfg, full_refresh=full_refresh, dry_run=dry_run)
