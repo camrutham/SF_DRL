@@ -9,9 +9,9 @@
 --
 -- Load Behavior:
 --   - Incremental Load (Stream CDC): Re-aggregates metrics ONLY for
---     products that changed in PRODUCT_DIM_STREAM or had new sales
---     lines in SALES_FACT_STREAM_PRODUCT.
---   - Full Refresh: Re-aggregates entire product catalog.
+--     active products (LATEST_FLAG = TRUE) that changed in PRODUCT_DIM_STREAM
+--     or had new sales lines in SALES_FACT_STREAM_PRODUCT.
+--   - Full Refresh: Re-aggregates entire active product catalog.
 -- =====================================================================
 
 MERGE INTO {DATABASE}.{SCHEMA_CURATED}.PRODUCT_PERFORMANCE tgt
@@ -43,6 +43,7 @@ USING (
         ON p.PRODUCT_ID = cp.PRODUCT_ID
     LEFT JOIN {DATABASE}.{SCHEMA_CANONICAL}.SALES_FACT f
         ON p.PRODUCT_ID = f.PRODUCT_ID
+    WHERE p.LATEST_FLAG = TRUE
     GROUP BY
         p.PRODUCT_ID,
         p.PRODUCT_NAME,

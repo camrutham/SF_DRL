@@ -1,12 +1,13 @@
 -- =====================================================================
 -- transform/canonical/masterdata/customer_dim.sql
--- Customer Dimension SCD Type 2 Transformation (Stream CDC DML)
+-- Customer Dimension SCD Type 1 Transformation (Stream CDC DML)
 -- Target Table: {DATABASE}.{SCHEMA_CANONICAL}.CUSTOMER_DIM
 -- Source Stream: {DATABASE}.{SCHEMA_RAW}.CUSTOMER_RAW_STREAM
 --
--- Load Behavior:
---   - Incremental Load (Stream CDC): Consumes only inserted/updated delta
---     records from CUSTOMER_RAW_STREAM (METADATA$ACTION = 'INSERT').
+-- Load Behavior (SCD Type 1):
+--   - Incremental Load (Stream CDC): In-place UPSERT (SCD Type 1).
+--     Updates matched customer records with latest attributes and inserts
+--     new customers. LATEST_FLAG remains TRUE for all records.
 --   - Full Refresh: Truncates target table, queries base table, and resets
 --     the stream offset.
 -- =====================================================================
@@ -55,6 +56,7 @@ WHEN MATCHED THEN
         tgt.EMAIL                    = src.EMAIL,
         tgt.PHONE                    = src.PHONE,
         tgt.SRC_SYS_DATE_UPDATED     = src.SRC_SYS_DATE_UPDATED,
+        tgt.LATEST_FLAG              = TRUE,
         tgt.DATE_UPDATED             = CURRENT_TIMESTAMP()
 WHEN NOT MATCHED THEN
     INSERT (

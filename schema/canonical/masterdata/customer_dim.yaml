@@ -2,7 +2,7 @@ table_name: CUSTOMER_DIM
 
 schema: sales_canonical
 
-description: Customer dimension (SCD Type 2).
+description: Customer dimension (SCD Type 1).
 
 source:
   table: CUSTOMER_RAW

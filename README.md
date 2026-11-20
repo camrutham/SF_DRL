@@ -28,7 +28,7 @@ flowchart TD
 
     subgraph Canonical["Canonical Layer (sales_canonical)"]
         CONTRACT_RAW_STREAM -->|Stream CDC MERGE| CONTRACT_DIM["CONTRACT_DIM (SCD Type 2)"]
-        CUSTOMER_RAW_STREAM -->|Stream CDC MERGE| CUSTOMER_DIM["CUSTOMER_DIM (SCD Type 2)"]
+        CUSTOMER_RAW_STREAM -->|Stream CDC MERGE| CUSTOMER_DIM["CUSTOMER_DIM (SCD Type 1)"]
         PRODUCT_RAW_STREAM -->|Stream CDC MERGE| PRODUCT_DIM["PRODUCT_DIM (SCD Type 2)"]
         DIRECT_SALE_STREAM & INDIRECT_SALE_STREAM -->|Stream CDC MERGE| SALES_FACT["SALES_FACT (Consolidated Facts)"]
         
