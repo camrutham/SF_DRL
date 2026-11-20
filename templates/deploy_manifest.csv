@@ -1,0 +1,7 @@
+step,file_path,description
+1,transform/raw/masterdata/streams.sql,Raw masterdata CDC streams
+2,transform/raw/sales/streams.sql,Raw sales CDC streams
+3,transform/canonical/masterdata/streams.sql,Canonical masterdata CDC streams
+4,transform/canonical/sales/streams.sql,Canonical sales CDC streams
+5,transform/canonical/sales/sales_fact_direct.sql,Direct sales projection view
+6,transform/canonical/sales/sales_fact_indirect.sql,Indirect sales projection view

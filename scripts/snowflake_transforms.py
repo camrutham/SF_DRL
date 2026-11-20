@@ -168,90 +168,71 @@ def execute_sql_file(cur, file_path: Path, cfg: dict, dry_run: bool = False) -> 
 
 
 # ==========================================================
-# Model Specifications: Stream CDC Single Source of Truth
+# Dynamic Template-Driven Model Specifications
+# Source of truth: templates/models.csv & templates/stream_mappings.csv
 # ==========================================================
-CANONICAL_MODELS = [
-    {
-        "table": "CONTRACT_DIM",
-        "file": TRANSFORM_DIR / "canonical" / "masterdata" / "contract_dim.sql",
-        "schema_key": "schema_canonical",
-        "streams": ["{DATABASE}.{SCHEMA_RAW}.CONTRACT_RAW_STREAM"],
-        "reset_streams_sql": [
-            "CREATE OR REPLACE STREAM {DATABASE}.{SCHEMA_RAW}.CONTRACT_RAW_STREAM ON TABLE {DATABASE}.{SCHEMA_RAW}.CONTRACT_RAW APPEND_ONLY = FALSE COMMENT = 'CDC stream tracking inserts and updates on CONTRACT_RAW';"
-        ],
-    },
-    {
-        "table": "CUSTOMER_DIM",
-        "file": TRANSFORM_DIR / "canonical" / "masterdata" / "customer_dim.sql",
-        "schema_key": "schema_canonical",
-        "streams": ["{DATABASE}.{SCHEMA_RAW}.CUSTOMER_RAW_STREAM"],
-        "reset_streams_sql": [
-            "CREATE OR REPLACE STREAM {DATABASE}.{SCHEMA_RAW}.CUSTOMER_RAW_STREAM ON TABLE {DATABASE}.{SCHEMA_RAW}.CUSTOMER_RAW APPEND_ONLY = FALSE COMMENT = 'CDC stream tracking inserts and updates on CUSTOMER_RAW';"
-        ],
-    },
-    {
-        "table": "PRODUCT_DIM",
-        "file": TRANSFORM_DIR / "canonical" / "masterdata" / "product_dim.sql",
-        "schema_key": "schema_canonical",
-        "streams": ["{DATABASE}.{SCHEMA_RAW}.PRODUCT_RAW_STREAM"],
-        "reset_streams_sql": [
-            "CREATE OR REPLACE STREAM {DATABASE}.{SCHEMA_RAW}.PRODUCT_RAW_STREAM ON TABLE {DATABASE}.{SCHEMA_RAW}.PRODUCT_RAW APPEND_ONLY = FALSE COMMENT = 'CDC stream tracking inserts and updates on PRODUCT_RAW';"
-        ],
-    },
-    {
-        "table": "SALES_FACT",
-        "file": TRANSFORM_DIR / "canonical" / "sales" / "sales_fact.sql",
-        "schema_key": "schema_canonical",
-        "streams": [
-            "{DATABASE}.{SCHEMA_RAW}.DIRECT_SALE_LINES_RAW_STREAM",
-            "{DATABASE}.{SCHEMA_RAW}.INDIRECT_SALE_LINES_RAW_STREAM",
-        ],
-        "reset_streams_sql": [
-            "CREATE OR REPLACE STREAM {DATABASE}.{SCHEMA_RAW}.DIRECT_SALE_LINES_RAW_STREAM ON TABLE {DATABASE}.{SCHEMA_RAW}.DIRECT_SALE_LINES_RAW APPEND_ONLY = FALSE COMMENT = 'CDC stream tracking inserts and updates on DIRECT_SALE_LINES_RAW';",
-            "CREATE OR REPLACE STREAM {DATABASE}.{SCHEMA_RAW}.INDIRECT_SALE_LINES_RAW_STREAM ON TABLE {DATABASE}.{SCHEMA_RAW}.INDIRECT_SALE_LINES_RAW APPEND_ONLY = FALSE COMMENT = 'CDC stream tracking inserts and updates on INDIRECT_SALE_LINES_RAW';",
-        ],
-    },
-]
+def load_models(stage: Optional[str] = None, cfg: dict = None) -> List[dict]:
+    """
+    Load model specifications dynamically from templates/models.csv.
+    Resolves streams and generates reset SQL from templates/stream_mappings.csv.
+    """
+    if cfg is None:
+        cfg = get_config()
+    snow_cfg = cfg["snowflake"]
+    db = snow_cfg["database"]
 
-CURATED_MODELS = [
-    {
-        "table": "CUSTOMER_ANALYTICS",
-        "file": TRANSFORM_DIR / "curated" / "customer_analytics.sql",
-        "schema_key": "schema_curated",
-        "streams": [
-            "{DATABASE}.{SCHEMA_CANONICAL}.CUSTOMER_DIM_STREAM",
-            "{DATABASE}.{SCHEMA_CANONICAL}.SALES_FACT_STREAM_CUSTOMER",
-        ],
-        "reset_streams_sql": [
-            "CREATE OR REPLACE STREAM {DATABASE}.{SCHEMA_CANONICAL}.CUSTOMER_DIM_STREAM ON TABLE {DATABASE}.{SCHEMA_CANONICAL}.CUSTOMER_DIM APPEND_ONLY = FALSE COMMENT = 'CDC stream tracking changes on CUSTOMER_DIM for curated downstream aggregations';",
-            "CREATE OR REPLACE STREAM {DATABASE}.{SCHEMA_CANONICAL}.SALES_FACT_STREAM_CUSTOMER ON TABLE {DATABASE}.{SCHEMA_CANONICAL}.SALES_FACT APPEND_ONLY = FALSE COMMENT = 'CDC stream tracking changes on SALES_FACT for CUSTOMER_ANALYTICS';",
-        ],
-    },
-    {
-        "table": "PRODUCT_PERFORMANCE",
-        "file": TRANSFORM_DIR / "curated" / "product_performance.sql",
-        "schema_key": "schema_curated",
-        "streams": [
-            "{DATABASE}.{SCHEMA_CANONICAL}.PRODUCT_DIM_STREAM",
-            "{DATABASE}.{SCHEMA_CANONICAL}.SALES_FACT_STREAM_PRODUCT",
-        ],
-        "reset_streams_sql": [
-            "CREATE OR REPLACE STREAM {DATABASE}.{SCHEMA_CANONICAL}.PRODUCT_DIM_STREAM ON TABLE {DATABASE}.{SCHEMA_CANONICAL}.PRODUCT_DIM APPEND_ONLY = FALSE COMMENT = 'CDC stream tracking changes on PRODUCT_DIM for curated downstream aggregations';",
-            "CREATE OR REPLACE STREAM {DATABASE}.{SCHEMA_CANONICAL}.SALES_FACT_STREAM_PRODUCT ON TABLE {DATABASE}.{SCHEMA_CANONICAL}.SALES_FACT APPEND_ONLY = FALSE COMMENT = 'CDC stream tracking changes on SALES_FACT for PRODUCT_PERFORMANCE';",
-        ],
-    },
-    {
-        "table": "SALES_SUMMARY",
-        "file": TRANSFORM_DIR / "curated" / "sales_summary.sql",
-        "schema_key": "schema_curated",
-        "streams": [
-            "{DATABASE}.{SCHEMA_CANONICAL}.SALES_FACT_STREAM_SUMMARY",
-        ],
-        "reset_streams_sql": [
-            "CREATE OR REPLACE STREAM {DATABASE}.{SCHEMA_CANONICAL}.SALES_FACT_STREAM_SUMMARY ON TABLE {DATABASE}.{SCHEMA_CANONICAL}.SALES_FACT APPEND_ONLY = FALSE COMMENT = 'CDC stream tracking changes on SALES_FACT for SALES_SUMMARY rollup';",
-        ],
-    },
-]
+    stream_map = {m["stream_name"]: m for m in load_stream_mappings(cfg)}
+
+    models_file = TEMPLATES_DIR / "models.csv"
+    if not models_file.exists():
+        logging.warning(f"⚠️ Models template not found: {models_file}")
+        return []
+
+    models = []
+    with open(models_file, "r", encoding="utf-8") as f:
+        reader = csv.DictReader(f)
+        for row in reader:
+            row_stage = row.get("stage", "").strip()
+            if stage and row_stage != stage:
+                continue
+
+            raw_stream_names = [s.strip() for s in row.get("streams", "").split(";") if s.strip()]
+            qualified_streams = []
+            reset_sqls = []
+
+            for s_name in raw_stream_names:
+                m_info = stream_map.get(s_name)
+                if m_info:
+                    layer = m_info.get("schema_layer", "raw")
+                    schema_key = f"schema_{layer}"
+                    schema_name = snow_cfg.get(schema_key, f"sales_{layer}")
+                    base_table = m_info["base_table_name"]
+                    desc = m_info.get("description", f"CDC stream on {base_table}")
+
+                    qualified_streams.append(f"{db}.{schema_name}.{s_name}")
+                    reset_sqls.append(
+                        f"CREATE OR REPLACE STREAM {db}.{schema_name}.{s_name} "
+                        f"ON TABLE {db}.{schema_name}.{base_table} APPEND_ONLY = FALSE "
+                        f"COMMENT = '{desc}';"
+                    )
+                else:
+                    qualified_streams.append(s_name)
+
+            models.append({
+                "table": row["table"].strip(),
+                "file": PROJECT_ROOT / row["file_path"].strip(),
+                "schema_key": row["schema_key"].strip(),
+                "stage": row_stage,
+                "streams": qualified_streams,
+                "reset_streams_sql": reset_sqls,
+            })
+
+    return models
+
+
+# Dynamic properties for backward compatibility
+CANONICAL_MODELS = load_models(stage="canonical")
+CURATED_MODELS = load_models(stage="curated")
 
 
 def execute_model(cur, model_spec: dict, cfg: dict, full_refresh: bool = False, dry_run: bool = False) -> str:
@@ -338,21 +319,28 @@ def execute_model(cur, model_spec: dict, cfg: dict, full_refresh: bool = False, 
     return f"SUCCESS: {table} loaded (Full refresh: {full_refresh}). Rows affected: {rows_affected}"
 
 
-def deploy_all(cur, cfg: dict, dry_run: bool = False) -> None:
-    """Deploy transformation views and CDC streams directly from transform/."""
-    logging.info("🚀 Deploying Snowflake Native Transformation Objects & CDC Streams...")
+def load_deploy_manifest() -> List[Path]:
+    """Load deployment file paths dynamically from templates/deploy_manifest.csv."""
+    manifest_file = TEMPLATES_DIR / "deploy_manifest.csv"
+    if not manifest_file.exists():
+        logging.warning(f"⚠️ Deploy manifest template not found: {manifest_file}")
+        return []
 
-    deploy_order = [
-        # Stage 1: Raw CDC Streams
-        TRANSFORM_DIR / "raw" / "masterdata" / "streams.sql",
-        TRANSFORM_DIR / "raw" / "sales" / "streams.sql",
-        # Stage 2: Canonical CDC Streams
-        TRANSFORM_DIR / "canonical" / "masterdata" / "streams.sql",
-        TRANSFORM_DIR / "canonical" / "sales" / "streams.sql",
-        # Stage 2: Canonical Projection Views
-        TRANSFORM_DIR / "canonical" / "sales" / "sales_fact_direct.sql",
-        TRANSFORM_DIR / "canonical" / "sales" / "sales_fact_indirect.sql",
-    ]
+    entries = []
+    with open(manifest_file, "r", encoding="utf-8") as f:
+        reader = csv.DictReader(f)
+        for row in reader:
+            if row.get("file_path"):
+                step = int(row.get("step", 999))
+                entries.append((step, PROJECT_ROOT / row["file_path"].strip()))
+    entries.sort(key=lambda x: x[0])
+    return [e[1] for e in entries]
+
+
+def deploy_all(cur, cfg: dict, dry_run: bool = False) -> None:
+    """Deploy transformation views and CDC streams dynamically from templates/deploy_manifest.csv."""
+    logging.info("🚀 Deploying Snowflake Native Transformation Objects & CDC Streams...")
+    deploy_order = load_deploy_manifest()
 
     for sql_file in deploy_order:
         execute_sql_file(cur, sql_file, cfg, dry_run=dry_run)
@@ -361,10 +349,11 @@ def deploy_all(cur, cfg: dict, dry_run: bool = False) -> None:
 
 
 def run_canonical(cur, cfg: dict, full_refresh: bool = False, dry_run: bool = False) -> str:
-    """Execute canonical layer transformations directly from transform/canonical/ files."""
+    """Execute canonical layer transformations dynamically from templates/models.csv."""
     logging.info(f"🔄 Running Stage 2: Canonical Transformations (full_refresh={full_refresh})...")
+    models = load_models(stage="canonical", cfg=cfg)
     results = []
-    for model in CANONICAL_MODELS:
+    for model in models:
         res = execute_model(cur, model, cfg, full_refresh=full_refresh, dry_run=dry_run)
         results.append(res)
     summary = "\n".join(results)
@@ -373,10 +362,11 @@ def run_canonical(cur, cfg: dict, full_refresh: bool = False, dry_run: bool = Fa
 
 
 def run_curated(cur, cfg: dict, full_refresh: bool = False, dry_run: bool = False) -> str:
-    """Execute curated layer transformations directly from transform/curated/ files."""
+    """Execute curated layer transformations dynamically from templates/models.csv."""
     logging.info(f"🔄 Running Stage 3: Curated Transformations (full_refresh={full_refresh})...")
+    models = load_models(stage="curated", cfg=cfg)
     results = []
-    for model in CURATED_MODELS:
+    for model in models:
         res = execute_model(cur, model, cfg, full_refresh=full_refresh, dry_run=dry_run)
         results.append(res)
     summary = "\n".join(results)

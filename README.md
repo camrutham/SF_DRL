@@ -108,7 +108,7 @@ SF_DRL/
 │   ├── snowflake_utils.py              # Snowflake connector & query helpers
 │   ├── config.json                     # Unified configuration
 │   └── copy_data_manifest.json         # S3 landing to raw table mappings
-└── templates/                          # CSV templates: file formats, storage integrations, stages, stream mappings
+└── templates/                          # Configuration templates: file_formats.csv, stages.csv, stream_mappings.csv, models.csv, deploy_manifest.csv
 ```
 
 ---

@@ -1,0 +1,8 @@
+stage,table,file_path,schema_key,streams,description
+canonical,CONTRACT_DIM,transform/canonical/masterdata/contract_dim.sql,schema_canonical,CONTRACT_RAW_STREAM,Contract SCD Type 2 dimension
+canonical,CUSTOMER_DIM,transform/canonical/masterdata/customer_dim.sql,schema_canonical,CUSTOMER_RAW_STREAM,Customer SCD Type 1 dimension
+canonical,PRODUCT_DIM,transform/canonical/masterdata/product_dim.sql,schema_canonical,PRODUCT_RAW_STREAM,Product SCD Type 2 dimension
+canonical,SALES_FACT,transform/canonical/sales/sales_fact.sql,schema_canonical,DIRECT_SALE_LINES_RAW_STREAM;INDIRECT_SALE_LINES_RAW_STREAM,Consolidated sales fact table
+curated,CUSTOMER_ANALYTICS,transform/curated/customer_analytics.sql,schema_curated,CUSTOMER_DIM_STREAM;SALES_FACT_STREAM_CUSTOMER,Customer analytics aggregation
+curated,PRODUCT_PERFORMANCE,transform/curated/product_performance.sql,schema_curated,PRODUCT_DIM_STREAM;SALES_FACT_STREAM_PRODUCT,Product performance aggregation
+curated,SALES_SUMMARY,transform/curated/sales_summary.sql,schema_curated,SALES_FACT_STREAM_SUMMARY,Daily sales summary rollup
