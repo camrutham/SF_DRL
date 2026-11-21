@@ -112,7 +112,7 @@ SF_DRL/
 │   ├── snowflake_utils.py              # Snowflake connector & query helpers
 │   ├── config.json                     # Unified configuration
 │   └── copy_data_manifest.json         # S3 landing to raw table mappings
-└── templates/                          # Configuration templates: file_formats.csv, stages.csv, stream_mappings.csv, deploy_manifest.csv
+└── templates/                          # Configuration templates: file_formats.csv, stages.csv, stream_mappings.csv, module_dependencies.csv, deploy_manifest.csv
 ```
 
 ---
@@ -124,10 +124,39 @@ The transformation orchestrator (`scripts/snowflake_transforms.py`) dynamically 
 - **Stage & Schema Layer:** Decoded automatically from the directory (`transform/canonical/...` → `sales_canonical`, `transform/curated/...` → `sales_curated`).
 - **Target Table Name:** Decoded from the SQL file stem (e.g. `contract_dim.sql` → `CONTRACT_DIM`).
 - **Referenced CDC Streams:** Automatically parsed from the SQL query text by matching against `templates/stream_mappings.csv`.
-- **Execution Order:** Dimension models (`_dim.sql` / `masterdata/` / `domaindata/`) run first, followed by fact models (`_fact.sql` / `sales/`), followed by curated rollups (`curated/`).
+- **Execution Order:** Resolved from a dependency graph (see below), not from file names.
 - **Full Refresh Handling:** Automatically swaps stream references to base tables and resets stream offsets post-load.
 
 > **Adding a New Model:** Simply create your `.sql` file under `transform/canonical/` or `transform/curated/`. No Python code edits or model registration CSVs required.
+
+---
+
+## Model & Module Dependencies
+
+Execution order is a topological sort that combines three sources:
+
+| Source | Defined in | Example |
+| :--- | :--- | :--- |
+| **SQL lineage** (automatic) | The model SQL itself: any `{SCHEMA_*}.TABLE` or stream it reads that another model produces | `customer_analytics.sql` reads `CUSTOMER_DIM_STREAM` → depends on `CUSTOMER_DIM` |
+| **Module rules** | `templates/module_dependencies.csv` | `curated` depends on `canonical`; `canonical/sales` depends on `canonical/masterdata;canonical/domaindata` |
+| **SQL hints** (optional) | A header comment in the model: `-- depends_on: TABLE_A, TABLE_B` | Edge cases lineage can't see |
+
+`templates/module_dependencies.csv`:
+```csv
+module,depends_on,description
+canonical/domaindata,,Contract domain data
+canonical/masterdata,,Customer and product master data
+canonical/sales,canonical/masterdata;canonical/domaindata,Sales facts load after master and domain data
+curated,canonical,Curated analytics depend on the entire canonical layer
+```
+- `module` is a path relative to `transform/`. A rule applies to that module and all its sub-modules (`curated` covers `curated/finance/...`).
+- `depends_on` accepts module paths or whole layers (`canonical`).
+
+Runtime behaviour:
+- **Failure isolation:** if a model fails, only its downstream dependents are `BLOCKED`; independent models still run. The run exits non-zero at the end.
+- **Cycle detection:** circular dependencies stop the run before any SQL is executed.
+- **Stage filtering:** `--stage curated` runs only curated models; canonical upstreams are assumed already loaded (logged).
+- **Inspect the plan:** `python scripts/snowflake_transforms.py --show-deps`
 
 ---
 

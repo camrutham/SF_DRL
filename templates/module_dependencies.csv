@@ -1,0 +1,5 @@
+module,depends_on,description
+canonical/domaindata,,Contract domain data - built directly from raw domaindata streams
+canonical/masterdata,,Customer and product master data - built directly from raw masterdata streams
+canonical/sales,canonical/masterdata;canonical/domaindata,Sales facts carry customer/product/contract keys - load after master and domain data
+curated,canonical,Curated analytics depend on the entire canonical layer
