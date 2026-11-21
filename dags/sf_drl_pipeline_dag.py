@@ -67,8 +67,10 @@ from copy_and_load import run_raw_copy_load, load_json, COPY_MANIFEST_PATH
 # ==========================================================
 def execute_raw_task(table_key: str, **context):
     """Executes COPY INTO for a single raw table from S3."""
-    print(f"🚀 Ingesting raw table key: {table_key} from S3 landing...")
-    run_raw_copy_load(selected_table=table_key, dry_run=False)
+    dag_run = context.get("dag_run")
+    dry_run = bool(dag_run.conf.get("dry_run", False)) if dag_run and dag_run.conf else False
+    print(f"🚀 Ingesting raw table key: {table_key} from S3 landing (dry_run={dry_run})...")
+    run_raw_copy_load(selected_table=table_key, dry_run=dry_run)
     print(f"✅ Ingested raw table key: {table_key}")
 
 
@@ -77,13 +79,16 @@ def execute_model_task(model_table: str, stage_name: str, **context):
     Executes a single transformation model (canonical or curated).
     Evaluates CDC streams incrementally; if {"full_refresh": true} is passed,
     truncates target, reloads from base table, and resets stream offsets.
+    Supports {"dry_run": true} for safe validation.
     """
     dag_run = context.get("dag_run")
     full_refresh = False
+    dry_run = False
     if dag_run and dag_run.conf:
         full_refresh = bool(dag_run.conf.get("full_refresh", False))
+        dry_run = bool(dag_run.conf.get("dry_run", False))
 
-    print(f"🚀 Executing model: {model_table} [Stage: {stage_name}] (full_refresh={full_refresh})...")
+    print(f"🚀 Executing model: {model_table} [Stage: {stage_name}] (full_refresh={full_refresh}, dry_run={dry_run})...")
     cfg = get_config()
     models = discover_models(stage=stage_name, cfg=cfg)
     target_model = next((m for m in models if m["table"] == model_table), None)
@@ -98,8 +103,9 @@ def execute_model_task(model_table: str, stage_name: str, **context):
         cur.execute(f"USE DATABASE {cfg['snowflake']['database']}")
         cur.execute(f"USE WAREHOUSE {cfg['snowflake']['warehouse']}")
 
-        result = execute_model(cur, target_model, cfg, full_refresh=full_refresh, dry_run=False)
-        conn.commit()
+        result = execute_model(cur, target_model, cfg, full_refresh=full_refresh, dry_run=dry_run)
+        if not dry_run:
+            conn.commit()
         print(f"✅ Finished: {result}")
     finally:
         cur.close()

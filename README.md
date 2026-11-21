@@ -204,7 +204,7 @@ python scripts/snowflake_transforms.py --stage curated
 
 ### 4. Apache Airflow Orchestration & Monitoring (Localhost:8088)
 
-The project includes production Airflow DAGs located in the `dags/` directory:
+The project includes production Airflow DAGs located in the `dags/` directory (see full details and JSON options in [AIRFLOW_CONFIG_GUIDE.md](dags/AIRFLOW_CONFIG_GUIDE.md)):
 
 #### A. Incremental CDC Pipeline (`dags/sf_drl_pipeline_dag.py`)
 1. **DAG ID:** `sf_drl_incremental_pipeline`
@@ -244,5 +244,12 @@ The project includes production Airflow DAGs located in the `dags/` directory:
        "skip_transforms": true
      }
      ```
+   * **Transforms Only:**
+     ```json
+     {
+       "transforms_only": true
+     }
+     ```
+
 
 

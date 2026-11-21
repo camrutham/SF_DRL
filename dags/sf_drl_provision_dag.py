@@ -73,7 +73,13 @@ from schema_orchestrator import (
 def task_create_schemas(**context):
     """Step 1: Create Database and Schemas (raw, canonical, curated)."""
     dag_run = context.get("dag_run")
-    dry_run = bool(dag_run.conf.get("dry_run", False)) if dag_run and dag_run.conf else False
+    conf = dag_run.conf if dag_run and dag_run.conf else {}
+    dry_run = bool(conf.get("dry_run", False))
+    transforms_only = bool(conf.get("transforms_only", False))
+
+    if transforms_only:
+        print("⏭️ Skipping database and schemas creation (transforms_only=True).")
+        return
 
     cfg = get_config()
     snow_cfg = cfg["snowflake"]
@@ -98,7 +104,13 @@ def task_create_schemas(**context):
 def task_setup_external_objects(**context):
     """Step 2: Create File Formats, Storage Integrations, and External Stages."""
     dag_run = context.get("dag_run")
-    dry_run = bool(dag_run.conf.get("dry_run", False)) if dag_run and dag_run.conf else False
+    conf = dag_run.conf if dag_run and dag_run.conf else {}
+    dry_run = bool(conf.get("dry_run", False))
+    transforms_only = bool(conf.get("transforms_only", False))
+
+    if transforms_only:
+        print("⏭️ Skipping external stage objects setup (transforms_only=True).")
+        return
 
     cfg = get_config()
     snow_cfg = cfg["snowflake"]
@@ -126,7 +138,13 @@ def task_setup_external_objects(**context):
 def task_create_tables(**context):
     """Step 3: Parse YAML table definitions and execute CREATE TABLE IF NOT EXISTS."""
     dag_run = context.get("dag_run")
-    dry_run = bool(dag_run.conf.get("dry_run", False)) if dag_run and dag_run.conf else False
+    conf = dag_run.conf if dag_run and dag_run.conf else {}
+    dry_run = bool(conf.get("dry_run", False))
+    transforms_only = bool(conf.get("transforms_only", False))
+
+    if transforms_only:
+        print("⏭️ Skipping target tables creation (transforms_only=True).")
+        return
 
     cfg = get_config()
     snow_cfg = cfg["snowflake"]
