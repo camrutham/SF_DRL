@@ -243,17 +243,19 @@ with DAG(
                 if up in canonical_tasks:
                     canonical_tasks[up] >> canonical_tasks[tbl]
 
-    # Map raw ingestion sources to root canonical models
-    if "contract" in raw_tasks and "CONTRACT_DIM" in canonical_tasks:
-        raw_tasks["contract"] >> canonical_tasks["CONTRACT_DIM"]
-    if "customer" in raw_tasks and "CUSTOMER_DIM" in canonical_tasks:
-        raw_tasks["customer"] >> canonical_tasks["CUSTOMER_DIM"]
-    if "product" in raw_tasks and "PRODUCT_DIM" in canonical_tasks:
-        raw_tasks["product"] >> canonical_tasks["PRODUCT_DIM"]
-    if "dir_sale_lines" in raw_tasks and "SALES_FACT" in canonical_tasks:
-        raw_tasks["dir_sale_lines"] >> canonical_tasks["SALES_FACT"]
-    if "indir_sale_lines" in raw_tasks and "SALES_FACT" in canonical_tasks:
-        raw_tasks["indir_sale_lines"] >> canonical_tasks["SALES_FACT"]
+    # Dynamically wire raw ingestion sources to canonical models based on SQL lineage
+    raw_table_to_task = {}
+    for tbl_key, info in manifest.get("tables", {}).items():
+        if tbl_key in raw_tasks:
+            raw_table_to_task[info.get("table", "").upper()] = raw_tasks[tbl_key]
+            raw_table_to_task[tbl_key.upper()] = raw_tasks[tbl_key]
+
+    for model in canonical_models:
+        tbl = model["table"]
+        if tbl in canonical_tasks:
+            for raw_ref in model.get("reads", set()):
+                if raw_ref.upper() in raw_table_to_task:
+                    raw_table_to_task[raw_ref.upper()] >> canonical_tasks[tbl]
 
     # --------------------------------------------------------
     # Stage 3: Curated Analytics Task Group
