@@ -56,10 +56,62 @@ except ImportError:
     except ImportError:
         TaskGroup = None
 
+try:
+    from airflow.sdk.exceptions import AirflowSkipException
+except ImportError:
+    from airflow.exceptions import AirflowSkipException
+
 # Import project utilities and engines
 from snowflake_utils import get_config, connect_snowflake
 from snowflake_transforms import discover_models, execute_model
 from copy_and_load import run_raw_copy_load, load_json, COPY_MANIFEST_PATH
+
+
+# ==========================================================
+# Filtering Logic for Selective Execution
+# ==========================================================
+def should_run_stage_and_table(stage_name: str, table_name: str, conf: dict) -> bool:
+    """
+    Evaluates whether a task should run based on configuration filters.
+    Supports:
+      - 'stages': list of stages (e.g. ['raw', 'canonical'], ['curated'])
+      - 'stage': single stage string shorthand (e.g. 'canonical')
+      - 'tables': list of tables/models (e.g. ['SALES_FACT'], ['contract', 'CONTRACT_DIM'])
+      - 'table': single table string shorthand (e.g. 'SALES_FACT')
+    """
+    if not conf:
+        return True
+
+    # 1. Evaluate stage filter
+    selected_stages = conf.get("stages")
+    if selected_stages is None and "stage" in conf:
+        selected_stages = [conf["stage"]]
+
+    if selected_stages:
+        stages_lower = [str(s).strip().lower() for s in selected_stages]
+        if stage_name.lower() not in stages_lower and not (stage_name.lower() == "raw" and "s3" in stages_lower):
+            return False
+
+    # 2. Evaluate table filter
+    selected_tables = conf.get("tables")
+    if selected_tables is None and "table" in conf:
+        selected_tables = [conf["table"]]
+
+    if selected_tables:
+        tables_upper = {str(t).strip().upper() for t in selected_tables}
+        candidates = {
+            table_name.upper(),
+            table_name.lower(),
+            table_name.replace("_", "").upper(),
+        }
+        if stage_name.lower() == "raw":
+            candidates.add(f"{table_name.upper()}_RAW")
+            candidates.add(table_name.upper().replace("_RAW", ""))
+
+        if not any(c in tables_upper for c in candidates):
+            return False
+
+    return True
 
 
 # ==========================================================
@@ -68,7 +120,13 @@ from copy_and_load import run_raw_copy_load, load_json, COPY_MANIFEST_PATH
 def execute_raw_task(table_key: str, **context):
     """Executes COPY INTO for a single raw table from S3."""
     dag_run = context.get("dag_run")
-    dry_run = bool(dag_run.conf.get("dry_run", False)) if dag_run and dag_run.conf else False
+    conf = dag_run.conf if dag_run and dag_run.conf else {}
+
+    if not should_run_stage_and_table("raw", table_key, conf):
+        print(f"⏭️ Skipping raw table '{table_key}': excluded by configuration filters.")
+        raise AirflowSkipException(f"Table '{table_key}' excluded by run config.")
+
+    dry_run = bool(conf.get("dry_run", False))
     print(f"🚀 Ingesting raw table key: {table_key} from S3 landing (dry_run={dry_run})...")
     run_raw_copy_load(selected_table=table_key, dry_run=dry_run)
     print(f"✅ Ingested raw table key: {table_key}")
@@ -82,11 +140,14 @@ def execute_model_task(model_table: str, stage_name: str, **context):
     Supports {"dry_run": true} for safe validation.
     """
     dag_run = context.get("dag_run")
-    full_refresh = False
-    dry_run = False
-    if dag_run and dag_run.conf:
-        full_refresh = bool(dag_run.conf.get("full_refresh", False))
-        dry_run = bool(dag_run.conf.get("dry_run", False))
+    conf = dag_run.conf if dag_run and dag_run.conf else {}
+
+    if not should_run_stage_and_table(stage_name, model_table, conf):
+        print(f"⏭️ Skipping {stage_name}.{model_table}: excluded by configuration filters.")
+        raise AirflowSkipException(f"Model '{model_table}' excluded by run config.")
+
+    full_refresh = bool(conf.get("full_refresh", False))
+    dry_run = bool(conf.get("dry_run", False))
 
     print(f"🚀 Executing model: {model_table} [Stage: {stage_name}] (full_refresh={full_refresh}, dry_run={dry_run})...")
     cfg = get_config()
@@ -122,6 +183,7 @@ default_args = {
     "email_on_retry": False,
     "retries": 1,
     "retry_delay": timedelta(minutes=5),
+    "trigger_rule": "none_failed",  # Allows downstream tasks to run when upstreams are selectively skipped
 }
 
 with DAG(

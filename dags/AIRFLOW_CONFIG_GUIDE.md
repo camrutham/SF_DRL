@@ -1,119 +1,179 @@
 # Apache Airflow DAG Configuration Guide
 
-This guide provides ready-to-use configuration JSONs for both DAGs in the `SF_DRL` data warehouse project. When manually triggering runs in the Airflow UI (**http://localhost:8088/**), click **Trigger DAG w/ config** and paste the desired JSON.
+This guide details all available configuration JSONs across all three DAGs in the `SF_DRL` data warehouse project. When manually triggering runs in the Airflow UI (**http://localhost:8088/**), click **Trigger DAG w/ config** and paste the desired JSON.
 
 ---
 
-## 1. Incremental Pipeline DAG (`sf_drl_incremental_pipeline`)
+## Architecture: 3 Dedicated Purpose-Built DAGs
+
+| DAG ID | Schedule | Default Mode | Purpose |
+| :--- | :--- | :--- | :--- |
+| **`sf_drl_incremental_pipeline`** | `0 */6 * * *` (Every 6h) | Incremental CDC (`full_refresh: false`) | Automated periodic micro-batch CDC loads using Snowflake Streams. |
+| **`sf_drl_full_load_pipeline`** | `None` (On-Demand) | Full Refresh (`full_refresh: true`) | Manual bulk reloads, layer-specific runs, and single-table backfills. |
+| **`sf_drl_schema_provisioning`** | `None` (On-Demand) | DDL Provisioning | Creation of DB, schemas, external stages, tables, and CDC streams. |
+
+---
+
+## 1. Full Load & Selective Backfill DAG (`sf_drl_full_load_pipeline`)
+
+File: `dags/sf_drl_full_load_dag.py`  
+Schedule: `None` (Strictly On-Demand)  
+Default: Truncates target tables, re-reads base data, and resets stream offsets.
+
+### Ready-to-Use Config JSONs
+
+#### Scenario 1.1: Complete Warehouse Full Load (Default)
+Reloads every layer from scratch: S3 to Raw -> Raw to Canonical -> Canonical to Curated.
+```json
+{}
+```
+
+#### Scenario 1.2: S3 to Raw Only
+Runs only the S3 ingestion tasks (`copy_contract`, `copy_customer`, `copy_product`, `copy_dir_sale_lines`, `copy_indir_sale_lines`). Canonical and curated tasks are automatically skipped.
+```json
+{
+  "stages": ["raw"]
+}
+```
+
+#### Scenario 1.3: Raw to Canonical Only
+Runs only the canonical dimension and fact models (`CONTRACT_DIM`, `CUSTOMER_DIM`, `PRODUCT_DIM`, `SALES_FACT`). S3 ingestion and curated tasks are skipped.
+```json
+{
+  "stages": ["canonical"]
+}
+```
+
+#### Scenario 1.4: S3 to Raw AND Raw to Canonical (Skip Curated)
+Ingests S3 files and transforms raw data into canonical tables, stopping before the curated layer.
+```json
+{
+  "stages": ["raw", "canonical"]
+}
+```
+
+#### Scenario 1.5: Curated Tables Only
+Runs only the curated analytics models (`CUSTOMER_ANALYTICS`, `PRODUCT_PERFORMANCE`, `SALES_SUMMARY`). Upstream canonical tables are read directly.
+```json
+{
+  "stages": ["curated"]
+}
+```
+
+#### Scenario 1.6: Single Individual Pipeline / Table (e.g., `SALES_FACT`)
+Runs ONLY the `SALES_FACT` transformation model. All other tasks in raw, canonical, and curated are skipped.
+```json
+{
+  "tables": ["SALES_FACT"]
+}
+```
+
+#### Scenario 1.7: Multiple Specific Tables Across Layers
+Runs only selected tables (for example, raw `contract` and canonical `CONTRACT_DIM`).
+```json
+{
+  "tables": ["contract", "CONTRACT_DIM"]
+}
+```
+
+#### Scenario 1.8: Dry-Run Simulation (Any Scenario)
+Add `"dry_run": true` to preview execution plans, check table targets, and print SQL without executing DML in Snowflake:
+```json
+{
+  "stages": ["canonical"],
+  "dry_run": true
+}
+```
+
+---
+
+## 2. Incremental CDC Pipeline (`sf_drl_incremental_pipeline`)
 
 File: `dags/sf_drl_pipeline_dag.py`  
 Schedule: `0 */6 * * *` (Every 6 hours)  
-Purpose: Ingest S3 Parquet files via `COPY INTO` and process transformation models using Snowflake Change Data Capture (CDC) Streams.
+Default: Incremental stream CDC processing (`SYSTEM$STREAM_HAS_DATA`).
 
-### Configuration Scenarios
+### Ready-to-Use Config JSONs
 
-#### Scenario 1.1: Standard Incremental Run (Default)
-Executes normal 6-hour incremental load. Reads changes recorded in CDC Streams (`SYSTEM$STREAM_HAS_DATA`). If no new data arrived, streams are skipped with 0 warehouse compute cost.
+#### Scenario 2.1: Automated / Default Incremental Run
+Processes new data recorded by CDC streams. If a stream has 0 changes, execution completes with 0 warehouse cost.
 ```json
 {}
 ```
 
-#### Scenario 1.2: Full Refresh / Reprocessing
-Truncates canonical and curated target tables, re-reads all records directly from base tables (bypassing streams), and resets CDC stream offsets to align with the base tables.
+#### Scenario 2.2: Incremental Run for Specific Stage
+Runs incremental CDC processing only for canonical models:
 ```json
 {
-  "full_refresh": true
+  "stages": ["canonical"]
 }
 ```
 
-#### Scenario 1.3: Dry-Run Incremental Simulation
-Validates connectivity, tests `SYSTEM$STREAM_HAS_DATA()`, and prints the generated SQL statements in task logs without running `COPY INTO` or modifying any Snowflake data.
+#### Scenario 2.3: Incremental Run for Single Table
+Evaluates the stream for only `SALES_FACT`:
 ```json
 {
-  "dry_run": true
+  "tables": ["SALES_FACT"]
 }
 ```
 
-#### Scenario 1.4: Dry-Run Full Refresh Simulation
-Simulates full refresh logic and prints table truncation commands and base-table DML without actually altering tables.
+#### Scenario 2.4: Dry-Run Incremental Simulation
+Verifies stream statuses and logs generated DML without executing:
 ```json
 {
-  "full_refresh": true,
   "dry_run": true
 }
 ```
 
 ---
 
-## 2. Schema Provisioning DAG (`sf_drl_schema_provisioning`)
+## 3. Schema & Infrastructure Provisioning (`sf_drl_schema_provisioning`)
 
 File: `dags/sf_drl_provision_dag.py`  
 Schedule: `None` (Strictly On-Demand)  
-Purpose: Provision Snowflake infrastructure, stages, storage integrations, table DDL, and CDC streams.
+Default: Sequentially creates DB, schemas, external stages, YAML tables, and CDC streams.
 
-### Configuration Scenarios
+### Ready-to-Use Config JSONs
 
-#### Scenario 2.1: Full Live Provisioning (Default)
-Runs all 4 stages sequentially:
-1. Creates Database & Schemas (`sales`, `sales_raw`, `sales_canonical`, `sales_curated`).
-2. Creates File Formats, Storage Integrations, and External Stages from `templates/*.csv`.
-3. Creates Target Tables from `schema/**/*.yaml` (`CREATE TABLE IF NOT EXISTS`).
-4. Creates Snowflake staging views and CDC streams from `transform/` hierarchy.
+#### Scenario 3.1: Complete Live Provisioning (Default)
+Provisions database, schemas, file formats, stages, tables, and CDC streams.
 ```json
 {}
 ```
 
-#### Scenario 2.2: Dry-Run Validation / Audit
-Generates and prints all SQL (database creation, external stages, YAML table schemas, and CDC stream DDL) in the Airflow task execution logs **without executing any DDL in Snowflake**. Ideal for code reviews and syntax validation.
+#### Scenario 3.2: Dry-Run Validation / Audit
+Generates and logs all DDL statements in the Airflow task logs **without modifying Snowflake**:
 ```json
 {
   "dry_run": true
 }
 ```
 
-#### Scenario 2.3: Database, Stages & Tables Only (Skip Transforms)
-Provisions the database, external stages, and all target tables from YAML, but skips deploying staging views and CDC streams.
+#### Scenario 3.3: Database, Stages & Tables Only (Skip Transforms)
+Creates the database, schemas, external stages, and tables from YAML, skipping views and streams.
 ```json
 {
   "skip_transforms": true
 }
 ```
 
-#### Scenario 2.4: Views & CDC Streams Only
-Skips database, stage, and table DDL. Only deploys or refreshes Snowflake native staging views and CDC streams. Useful when modifying model SQL or stream definitions.
+#### Scenario 3.4: Native Views & CDC Streams Only
+Skips database, stages, and tables. Deploys or refreshes only staging views and CDC streams.
 ```json
 {
   "transforms_only": true
 }
 ```
 
-#### Scenario 2.5: Views & CDC Streams Dry-Run Preview
-Simulates deploying views and streams only, printing their DDL in logs without executing.
-```json
-{
-  "transforms_only": true,
-  "dry_run": true
-}
-```
-
 ---
 
-## Summary Matrix
+## Parameter Reference Matrix
 
-| DAG ID | Config Parameter | Type | Default | Description |
-| :--- | :--- | :--- | :--- | :--- |
-| `sf_drl_incremental_pipeline` | `full_refresh` | `boolean` | `false` | When `true`, reloads all data from base tables and resets CDC stream offsets. |
-| `sf_drl_incremental_pipeline` | `dry_run` | `boolean` | `false` | When `true`, prints execution plans and SQL without running DML. |
-| `sf_drl_schema_provisioning` | `dry_run` | `boolean` | `false` | When `true`, prints all generated DDL in Airflow logs without altering Snowflake. |
-| `sf_drl_schema_provisioning` | `skip_transforms` | `boolean` | `false` | When `true`, skips deploying views and CDC streams. |
-| `sf_drl_schema_provisioning` | `transforms_only` | `boolean` | `false` | When `true`, only deploys views and CDC streams (skips db/stages/tables). |
-
----
-
-## How to Apply in Airflow UI
-
-1. Go to **http://localhost:8088/**.
-2. Locate the DAG (`sf_drl_incremental_pipeline` or `sf_drl_schema_provisioning`).
-3. Click the dropdown arrow on the **Trigger DAG** button (or click the play icon) and select **Trigger DAG w/ config**.
-4. In the configuration text box, paste the JSON snippet.
-5. Click **Trigger**.
+| Parameter | Accepted Values | Target DAGs | Description |
+| :--- | :--- | :--- | :--- |
+| `stages` / `stage` | `["raw"]`, `["canonical"]`, `["curated"]`, `["raw", "canonical"]` | Full Load, Incremental | Selectively filters which stage(s) to execute. |
+| `tables` / `table` | e.g. `["SALES_FACT"]`, `["contract", "CONTRACT_DIM"]` | Full Load, Incremental | Selectively runs specific individual table(s) or model(s). |
+| `full_refresh` | `true` or `false` | Full Load (defaults to `true`), Incremental (defaults to `false`) | Determines whether to truncate & reload from base tables or use CDC streams. |
+| `dry_run` | `true` or `false` | All DAGs | Prints execution plan and SQL in task logs without running DDL/DML. |
+| `skip_transforms` | `true` or `false` | Provisioning DAG | Skips deployment of staging views and CDC streams. |
+| `transforms_only` | `true` or `false` | Provisioning DAG | Deploys only staging views and CDC streams, skipping tables and stages. |

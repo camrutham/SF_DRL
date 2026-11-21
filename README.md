@@ -204,27 +204,28 @@ python scripts/snowflake_transforms.py --stage curated
 
 ### 4. Apache Airflow Orchestration & Monitoring (Localhost:8088)
 
-The project includes production Airflow DAGs located in the `dags/` directory (see full details and JSON options in [AIRFLOW_CONFIG_GUIDE.md](dags/AIRFLOW_CONFIG_GUIDE.md)):
+The project includes 3 production Airflow DAGs located in the `dags/` directory (see full details and JSON options in [AIRFLOW_CONFIG_GUIDE.md](dags/AIRFLOW_CONFIG_GUIDE.md)):
 
 #### A. Incremental CDC Pipeline (`dags/sf_drl_pipeline_dag.py`)
 1. **DAG ID:** `sf_drl_incremental_pipeline`
 2. **Schedule:** `0 */6 * * *` (Every 6 hours)
-3. **Task Structure:**
-   * **Stage 1 (Raw Ingestion):** Individual tasks for S3 ingestion (`copy_contract`, `copy_customer`, `copy_product`, `copy_dir_sale_lines`, `copy_indir_sale_lines`).
-   * **Stage 2 (Canonical Transforms):** Tasks for `CONTRACT_DIM`, `CUSTOMER_DIM`, `PRODUCT_DIM`, and `SALES_FACT`.
-   * **Stage 3 (Curated Analytics):** Tasks for `CUSTOMER_ANALYTICS`, `PRODUCT_PERFORMANCE`, and `SALES_SUMMARY`.
-4. **Trigger with Full Refresh:**
-   In the Airflow UI (`http://localhost:8088/`), click **Trigger DAG w/ config** and pass:
-   ```json
-   {
-     "full_refresh": true
-   }
-   ```
-   *(Defaults to `false` for incremental stream CDC processing).*
+3. **Purpose:** Automated micro-batch incremental processing using Snowflake Streams (`SYSTEM$STREAM_HAS_DATA`). If no new data has arrived, streams are skipped with 0 warehouse cost.
 
-#### B. Schema & Infrastructure Provisioning (`dags/sf_drl_provision_dag.py`)
+#### B. Full Load & Selective Backfill Pipeline (`dags/sf_drl_full_load_dag.py`)
+1. **DAG ID:** `sf_drl_full_load_pipeline`
+2. **Schedule:** `None` (Strictly on-demand)
+3. **Purpose:** Manual bulk reloads and selective backfills. Defaults to `full_refresh: true`.
+4. **Selective Execution via Config JSON:**
+   * **S3 to Raw Only:** `{"stages": ["raw"]}`
+   * **Raw to Canonical Only:** `{"stages": ["canonical"]}`
+   * **S3 to Raw AND Raw to Canonical:** `{"stages": ["raw", "canonical"]}`
+   * **Curated Only:** `{"stages": ["curated"]}`
+   * **Single Table (e.g. `SALES_FACT`):** `{"tables": ["SALES_FACT"]}`
+   * **Dry-Run Preview:** `{"dry_run": true}`
+
+#### C. Schema & Infrastructure Provisioning (`dags/sf_drl_provision_dag.py`)
 1. **DAG ID:** `sf_drl_schema_provisioning`
-2. **Schedule:** `None` (strictly on-demand for provisioning / DDL deployments)
+2. **Schedule:** `None` (Strictly on-demand)
 3. **Task Structure:**
    * `1_create_database_and_schemas`: Creates `sales` database and schemas (`sales_raw`, `sales_canonical`, `sales_curated`).
    * `2_setup_external_stage_objects`: Creates File Formats, Storage Integrations, and External Stages from `templates/*.csv`.
@@ -232,24 +233,10 @@ The project includes production Airflow DAGs located in the `dags/` directory (s
    * `4_setup_transformation_objects`: Deploys staging views and CDC streams from `transform/` hierarchy.
 4. **Trigger Options (via "Trigger DAG w/ config"):**
    * **Live Provisioning:** Default trigger `{}`.
-   * **Dry-Run Preview (validates SQL without running DDL):**
-     ```json
-     {
-       "dry_run": true
-     }
-     ```
-   * **Skip Native Transforms:**
-     ```json
-     {
-       "skip_transforms": true
-     }
-     ```
-   * **Transforms Only:**
-     ```json
-     {
-       "transforms_only": true
-     }
-     ```
+   * **Dry-Run Preview (validates SQL without running DDL):** `{"dry_run": true}`
+   * **Skip Native Transforms:** `{"skip_transforms": true}`
+   * **Transforms Only:** `{"transforms_only": true}`
+
 
 
 
