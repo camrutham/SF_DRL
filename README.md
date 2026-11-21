@@ -204,8 +204,9 @@ python scripts/snowflake_transforms.py --stage curated
 
 ### 4. Apache Airflow Orchestration & Monitoring (Localhost:8088)
 
-The project includes an Airflow DAG in `dags/sf_drl_pipeline_dag.py` that schedules the incremental pipeline every 6 hours and dynamically mirrors all models and dependencies:
+The project includes production Airflow DAGs located in the `dags/` directory:
 
+#### A. Incremental CDC Pipeline (`dags/sf_drl_pipeline_dag.py`)
 1. **DAG ID:** `sf_drl_incremental_pipeline`
 2. **Schedule:** `0 */6 * * *` (Every 6 hours)
 3. **Task Structure:**
@@ -220,4 +221,28 @@ The project includes an Airflow DAG in `dags/sf_drl_pipeline_dag.py` that schedu
    }
    ```
    *(Defaults to `false` for incremental stream CDC processing).*
+
+#### B. Schema & Infrastructure Provisioning (`dags/sf_drl_provision_dag.py`)
+1. **DAG ID:** `sf_drl_schema_provisioning`
+2. **Schedule:** `None` (strictly on-demand for provisioning / DDL deployments)
+3. **Task Structure:**
+   * `1_create_database_and_schemas`: Creates `sales` database and schemas (`sales_raw`, `sales_canonical`, `sales_curated`).
+   * `2_setup_external_stage_objects`: Creates File Formats, Storage Integrations, and External Stages from `templates/*.csv`.
+   * `3_create_target_tables`: Generates and executes `CREATE TABLE IF NOT EXISTS` for all tables defined in `schema/**/*.yaml`.
+   * `4_setup_transformation_objects`: Deploys staging views and CDC streams from `transform/` hierarchy.
+4. **Trigger Options (via "Trigger DAG w/ config"):**
+   * **Live Provisioning:** Default trigger `{}`.
+   * **Dry-Run Preview (validates SQL without running DDL):**
+     ```json
+     {
+       "dry_run": true
+     }
+     ```
+   * **Skip Native Transforms:**
+     ```json
+     {
+       "skip_transforms": true
+     }
+     ```
+
 
