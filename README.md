@@ -199,3 +199,25 @@ python scripts/snowflake_transforms.py --stage all --full-refresh
 python scripts/snowflake_transforms.py --stage canonical
 python scripts/snowflake_transforms.py --stage curated
 ```
+
+---
+
+### 4. Apache Airflow Orchestration & Monitoring (Localhost:8088)
+
+The project includes an Airflow DAG in `dags/sf_drl_pipeline_dag.py` that schedules the incremental pipeline every 6 hours and dynamically mirrors all models and dependencies:
+
+1. **DAG ID:** `sf_drl_incremental_pipeline`
+2. **Schedule:** `0 */6 * * *` (Every 6 hours)
+3. **Task Structure:**
+   * **Stage 1 (Raw Ingestion):** Individual tasks for S3 ingestion (`copy_contract`, `copy_customer`, `copy_product`, `copy_dir_sale_lines`, `copy_indir_sale_lines`).
+   * **Stage 2 (Canonical Transforms):** Tasks for `CONTRACT_DIM`, `CUSTOMER_DIM`, `PRODUCT_DIM`, and `SALES_FACT`.
+   * **Stage 3 (Curated Analytics):** Tasks for `CUSTOMER_ANALYTICS`, `PRODUCT_PERFORMANCE`, and `SALES_SUMMARY`.
+4. **Trigger with Full Refresh:**
+   In the Airflow UI (`http://localhost:8088/`), click **Trigger DAG w/ config** and pass:
+   ```json
+   {
+     "full_refresh": true
+   }
+   ```
+   *(Defaults to `false` for incremental stream CDC processing).*
+
