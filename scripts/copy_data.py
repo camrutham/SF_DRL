@@ -15,7 +15,8 @@ import snowflake.connector
 SCRIPT_DIR = Path(__file__).resolve().parent
 PROJECT_ROOT = SCRIPT_DIR.parent
 DEFAULT_MANIFEST = SCRIPT_DIR / "copy_data_manifest.json"
-DEFAULT_CONFIG = SCRIPT_DIR / "config.json"
+
+from snowflake_utils import get_config, connect_snowflake
 
 
 def load_json(path):
@@ -23,19 +24,12 @@ def load_json(path):
         return json.load(f)
 
 
-def get_config():
-    if DEFAULT_CONFIG.exists():
-        return load_json(DEFAULT_CONFIG)
-    raise FileNotFoundError(f"Config file not found: {DEFAULT_CONFIG}")
-
-
-def get_copy_defaults(cfg=None):
-    cfg = cfg or get_config()
-    copy_cfg = cfg.get("copy", {}) if isinstance(cfg, dict) else {}
+def get_copy_defaults(manifest=None):
+    manifest = manifest or get_manifest()
     return {
-        "default_schema": copy_cfg.get("default_schema", "sales_raw"),
-        "storage_integration": copy_cfg.get("storage_integration", "drl_sf_s3_int"),
-        "file_format": copy_cfg.get("file_format", "parquet_format"),
+        "default_schema": manifest.get("default_schema", "sales_raw"),
+        "storage_integration": manifest.get("storage_integration", "drl_sf_s3_int"),
+        "file_format": manifest.get("file_format", "parquet_format"),
     }
 
 
@@ -44,12 +38,10 @@ def get_manifest(path=None):
     if manifest_path.exists():
         return load_json(manifest_path)
 
-    cfg = get_config()
-    defaults = get_copy_defaults(cfg)
     return {
-        "default_schema": defaults["default_schema"],
-        "storage_integration": defaults["storage_integration"],
-        "file_format": defaults["file_format"],
+        "default_schema": "sales_raw",
+        "storage_integration": "drl_sf_s3_int",
+        "file_format": "parquet_format",
         "tables": {},
     }
 

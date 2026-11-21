@@ -45,9 +45,9 @@ if hasattr(sys.stderr, 'reconfigure'):
 SCRIPT_DIR = Path(__file__).resolve().parent
 PROJECT_ROOT = SCRIPT_DIR.parent
 LOG_DIR = PROJECT_ROOT / "logs"
-DEFAULT_CONFIG = SCRIPT_DIR / "config.json"
 COPY_MANIFEST_PATH = SCRIPT_DIR / "copy_data_manifest.json"
 
+from snowflake_utils import connect_snowflake, get_config
 from snowflake_transforms import run_canonical, run_curated, run_full_pipeline
 
 
@@ -82,12 +82,6 @@ def setup_logging(label: str) -> Path:
 def load_json(path: Path) -> dict:
     with open(path, "r", encoding="utf-8") as f:
         return json.load(f)
-
-
-def get_config() -> dict:
-    if DEFAULT_CONFIG.exists():
-        return load_json(DEFAULT_CONFIG)
-    raise FileNotFoundError(f"Config file not found: {DEFAULT_CONFIG}")
 
 
 # ==========================================================

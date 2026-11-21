@@ -76,6 +76,7 @@ The project maintains an exact 1:1 alignment between table DDL schemas and trans
 ```
 SF_DRL/
 ├── README.md                           # Complete architecture guide & command reference
+├── .env.example                        # Template for Snowflake credentials & environment variables
 ├── schema/                             # YAML Table Schemas (DDL source of truth)
 │   ├── raw/                            # Raw layer schemas
 │   │   ├── domaindata/                 # contract_raw.yaml
@@ -109,8 +110,7 @@ SF_DRL/
 │   ├── ingest_data.py                  # Pipeline runner (raw -> canonical -> curated)
 │   ├── copy_data.py                    # Stage & Raw copy load logic
 │   ├── ddl_generator.py                # YAML to DDL SQL generator
-│   ├── snowflake_utils.py              # Snowflake connector & query helpers
-│   ├── config.json                     # Unified configuration
+│   ├── snowflake_utils.py              # Snowflake connector & query helpers (reads .env)
 │   └── copy_data_manifest.json         # S3 landing to raw table mappings
 └── templates/                          # Configuration templates: file_formats.csv, stages.csv, stream_mappings.csv, module_dependencies.csv, deploy_manifest.csv
 ```

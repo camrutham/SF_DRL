@@ -37,7 +37,6 @@ from pathlib import Path
 SCRIPT_DIR = Path(__file__).resolve().parent
 PROJECT_ROOT = SCRIPT_DIR.parent
 LOG_DIR = PROJECT_ROOT / "logs"
-CONFIG_PATH = SCRIPT_DIR / "config.json"
 
 from snowflake_utils import connect_snowflake, get_config
 from snowflake_transforms import run_canonical, run_curated, run_full_pipeline
