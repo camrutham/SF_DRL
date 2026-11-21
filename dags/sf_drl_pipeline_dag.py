@@ -18,19 +18,43 @@ import sys
 from datetime import datetime, timedelta
 from pathlib import Path
 
-# Add project root and scripts to sys.path so modules are discoverable
+# Resolve project root dynamically across both Host OS and Docker container mounts
 DAGS_DIR = Path(__file__).resolve().parent
-PROJECT_ROOT = Path(os.environ.get("SF_DRL_ROOT", DAGS_DIR.parent))
+
+candidate_roots = [
+    Path(os.environ.get("SF_DRL_ROOT", "")),
+    Path("/repos/SF_DRL"),
+    DAGS_DIR.parent,
+    Path("C:/repos/SF_DRL"),
+]
+
+PROJECT_ROOT = DAGS_DIR.parent
+for cand in candidate_roots:
+    if cand and (cand / "scripts" / "snowflake_utils.py").exists():
+        PROJECT_ROOT = cand
+        break
+
 SCRIPTS_DIR = PROJECT_ROOT / "scripts"
 if str(SCRIPTS_DIR) not in sys.path:
     sys.path.insert(0, str(SCRIPTS_DIR))
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
-# Import Airflow modules
+# Import Airflow modules (supports Airflow 2.x and Airflow 3.x)
 from airflow import DAG
-from airflow.operators.python import PythonOperator
-from airflow.utils.task_group import TaskGroup
+
+try:
+    from airflow.providers.standard.operators.python import PythonOperator
+except ImportError:
+    from airflow.operators.python import PythonOperator
+
+try:
+    from airflow.sdk import TaskGroup
+except ImportError:
+    try:
+        from airflow.utils.task_group import TaskGroup
+    except ImportError:
+        TaskGroup = None
 
 # Import project utilities and engines
 from snowflake_utils import get_config, connect_snowflake
