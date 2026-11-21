@@ -107,7 +107,6 @@ SF_DRL/
 │   ├── schema_orchestrator.py          # Complete environment orchestrator
 │   ├── snowflake_transforms.py         # Direct Native Transformation Engine & View Deployer
 │   ├── copy_and_load.py                # Unified Copy Load + Direct Native Transformation Pipeline
-│   ├── ingest_data.py                  # Pipeline runner (raw -> canonical -> curated)
 │   ├── copy_data.py                    # Stage & Raw copy load logic
 │   ├── ddl_generator.py                # YAML to DDL SQL generator
 │   ├── snowflake_utils.py              # Snowflake connector & query helpers (reads .env)
@@ -177,9 +176,6 @@ python scripts/copy_and_load.py
 
 # With full refresh (truncate targets & reload):
 python scripts/copy_and_load.py --full-refresh
-
-# Or via ingest_data.py:
-python scripts/ingest_data.py
 
 # Run transformations only (Canonical + Curated):
 python scripts/copy_and_load.py --stage transforms
