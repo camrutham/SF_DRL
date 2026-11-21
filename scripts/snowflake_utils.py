@@ -25,18 +25,8 @@ def get_config():
     for path in possible_paths:
         if path.exists():
             print(f"📘 Using config file: {path}")
-            with open(path, "r") as f:
-                config = json.load(f)
-                # After loading initial config, update paths based on config values
-                if "directories" in config and "files" in config:
-                    config_dir = project_root / config["directories"]["config"]
-                    config_file = config["files"]["config"]
-                    final_path = config_dir / config_file
-                    if final_path.exists() and final_path != path:
-                        print(f"📘 Using configured config location: {final_path}")
-                        with open(final_path, "r") as f2:
-                            return json.load(f2)
-                return config
+            with open(path, "r", encoding="utf-8") as f:
+                return json.load(f)
 
     print("❌ config.json not found in expected locations.")
     print("👉 Make sure config.json exists in project root or scripts directory")

@@ -14,37 +14,5 @@
     "default_schema": "sales_raw",
     "storage_integration": "drl_sf_s3_int",
     "file_format": "parquet_format"
-  },
-  "transforms": {
-    "transform_dir": "transform",
-    "task_schedule": "60 MINUTE",
-    "use_stored_procedures": false,
-    "enable_cdc_streams": true
-  },
-  "directories": {
-    "config": "config",
-    "logs": "logs",
-    "schema": "schema",
-    "templates": "templates",
-    "transform": "transform"
-  },
-  "files": {
-    "config": "config.json",
-    "copy_manifest": "scripts/copy_data_manifest.json",
-    "templates": {
-      "file_formats": "file_formats.csv",
-      "storage_integrations": "storage_integrations.csv",
-      "stages": "stages.csv",
-      "stream_mappings": "stream_mappings.csv",
-      "module_dependencies": "module_dependencies.csv",
-      "deploy_manifest": "deploy_manifest.csv"
-    }
-  },
-  "sql": {
-    "schema_layer_map": {
-      "raw": "schema_raw",
-      "canonical": "schema_canonical",
-      "curated": "schema_curated"
-    }
   }
 }
