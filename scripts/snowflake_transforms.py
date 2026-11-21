@@ -7,7 +7,7 @@ Executes pure SQL transformation models directly from the `transform/` directory
 using Snowflake Change Data Capture (CDC) Streams for zero full-table-scan incremental processing:
 
   - Canonical Models (Stream CDC DML):
-      transform/canonical/masterdata/contract_dim.sql (CONTRACT_RAW_STREAM)
+      transform/canonical/domaindata/contract_dim.sql (CONTRACT_RAW_STREAM)
       transform/canonical/masterdata/customer_dim.sql (CUSTOMER_RAW_STREAM)
       transform/canonical/masterdata/product_dim.sql (PRODUCT_RAW_STREAM)
       transform/canonical/sales/sales_fact.sql (DIRECT & INDIRECT SALE LINES RAW STREAMS)
@@ -19,6 +19,7 @@ using Snowflake Change Data Capture (CDC) Streams for zero full-table-scan incre
 
   - Staging Views & CDC Streams:
       transform/raw/masterdata/streams.sql
+      transform/raw/domaindata/streams.sql
       transform/raw/sales/streams.sql
       transform/canonical/masterdata/streams.sql
       transform/canonical/sales/streams.sql
@@ -251,10 +252,11 @@ def discover_models(stage: Optional[str] = None, cfg: dict = None) -> List[dict]
                     )
 
             # Determine execution priority:
-            # For canonical: masterdata / _dim first (priority 1), facts second (priority 2), other (priority 3)
+            # For canonical: masterdata / domaindata / _dim first (priority 1), facts second (priority 2), other (priority 3)
             # For curated: priority 1
             if stg == "canonical":
-                if "_dim" in sql_file.stem.lower() or "masterdata" in [p.lower() for p in sql_file.parts]:
+                dim_modules = {"masterdata", "domaindata"}
+                if "_dim" in sql_file.stem.lower() or dim_modules & {p.lower() for p in sql_file.parts}:
                     prio = 1
                 elif "_fact" in sql_file.stem.lower() or "sales" in [p.lower() for p in sql_file.parts]:
                     prio = 2

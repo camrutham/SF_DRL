@@ -1,5 +1,5 @@
 -- =====================================================================
--- transform/canonical/masterdata/contract_dim.sql
+-- transform/canonical/domaindata/contract_dim.sql
 -- Contract Dimension SCD Type 2 Transformation (Stream CDC & Historical Batch DML)
 -- Target Table: {DATABASE}.{SCHEMA_CANONICAL}.CONTRACT_DIM
 -- Source Stream: {DATABASE}.{SCHEMA_RAW}.CONTRACT_RAW_STREAM
